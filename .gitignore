@@ -16,9 +16,16 @@ checkpoints/
 *.pth
 *.safetensors
 
-# Footage: source movie and extracted frame folders
+# Footage: source movie and extracted frame folders.
+# The tiny sidecars that make a shot reproducible ARE committed: shot.json records the
+# exact ffmpeg cut, point.json records the clicks. Git cannot re-include a file whose
+# parent directory is excluded, so the directories are re-admitted before the files.
 shots/*
 !shots/.gitkeep
+!shots/*/
+shots/*/*
+!shots/*/shot.json
+!shots/*/point.json
 
 # Generated mattes, RGBA sequences, comps
 outputs/*

@@ -1,0 +1,17 @@
+{
+  "shot": "walk",
+  "image_size": [960, 400],
+  "prompts": [
+    {
+      "frame": 0,
+      "positive": [[360, 200]],
+      "negative": []
+    },
+    {
+      "frame": 67,
+      "positive": [[352, 250], [400, 360], [415, 60]],
+      "negative": [[321, 379]]
+    }
+  ],
+  "_note": "Frame 0 is the Task 1 single click (v1 = this prompt alone). Frame 67 is the Task 2 correction: one negative click on the pavement wedge that latches on from f065, paired with three positives that re-describe the subject. SAM 2 attends to every conditioning frame at every timestep, so a corrective frame must describe the whole subject or it redefines the object globally."
+}

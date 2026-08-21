@@ -20,8 +20,13 @@ What is measured
                      crawling frame to frame without the silhouette changing.
     softness         share of pixels strictly between 0 and 255. A binary matte scores
                      exactly 0; a real key has a band of fractional coverage at every edge.
-    components       connected components in the binarised matte. Fragmentation, and
-                     stray blobs detached from the subject.
+    components       connected components in the binarised matte. Counted two ways:
+                     raw, and "significant" (>= 1% of the largest component). The raw
+                     count is dominated by 1-2 pixel specks sitting just over the
+                     threshold, which is noise, not fragmentation. The significant count
+                     is the one to read. Note that legitimate occlusion splits a subject
+                     too: a railing across an actor genuinely yields 3 components.
+    specks           total pixels living in insignificant components. Threshold noise.
 
 Shape metrics binarise at alpha > 127 so a soft matte and a binary one are compared on
 the same footing.
@@ -83,7 +88,21 @@ def measure(alphas: np.ndarray, label: str, source: Path) -> dict:
     soft = ((alphas > 0) & (alphas < 255)).reshape(n, -1).mean(1)
 
     from scipy import ndimage
-    comps = np.array([ndimage.label(m)[1] for m in hard], dtype=float)
+    SIG = 0.01                      # a component counts once it reaches 1% of the largest
+    comps, comps_sig, specks = [], [], []
+    for m in hard:
+        lab, n_comp = ndimage.label(m)      # not `n` - that is the frame count
+        comps.append(n_comp)
+        if n_comp == 0:
+            comps_sig.append(0); specks.append(0); continue
+        sizes = ndimage.sum(m, lab, range(1, n_comp + 1))
+        big = sizes.max()
+        keep = sizes >= SIG * big
+        comps_sig.append(int(keep.sum()))
+        specks.append(int(sizes[~keep].sum()))
+    comps = np.array(comps, dtype=float)
+    comps_sig = np.array(comps_sig, dtype=float)
+    specks = np.array(specks, dtype=float)
 
     # Temporal L1 on the raw alpha: how much the key itself changes per frame.
     l1 = np.abs(alphas[1:].astype(float) - alphas[:-1].astype(float)).reshape(n - 1, -1).mean(1)
@@ -110,7 +129,12 @@ def measure(alphas: np.ndarray, label: str, source: Path) -> dict:
                      "soft_pixel_fraction_max": round(float(soft.max()), 6),
                      "distinct_alpha_values": int(len(np.unique(alphas)))},
         "components": {"mean": round(float(comps.mean()), 3),
-                       "max": int(comps.max())},
+                       "max": int(comps.max()),
+                       "significant_mean": round(float(comps_sig.mean()), 3),
+                       "significant_max": int(comps_sig.max()),
+                       "significant_threshold": SIG},
+        "speck_pixels": {"mean": round(float(specks.mean()), 2),
+                         "max": int(specks.max())},
         "alpha_l1_change_mean": round(float(l1.mean()), 4),
         "area_fraction": {"mean": round(float((area / (h * w)).mean()), 5),
                           "min": round(float((area / (h * w)).min()), 5),
@@ -134,10 +158,12 @@ ROWS = [
      lambda m: 100 * m["softness"]["soft_pixel_fraction_mean"], "higher"),
     ("Softness - distinct alpha values", "",
      lambda m: m["softness"]["distinct_alpha_values"], "higher"),
-    ("Fragmentation - mean connected components", "",
-     lambda m: m["components"]["mean"], "lower"),
-    ("Fragmentation - max connected components", "",
-     lambda m: m["components"]["max"], "lower"),
+    ("Fragmentation - mean significant components (>=1% of largest)", "",
+     lambda m: m["components"]["significant_mean"], "lower"),
+    ("Fragmentation - max significant components", "",
+     lambda m: m["components"]["significant_max"], "lower"),
+    ("Threshold noise - mean speck pixels", "px",
+     lambda m: m["speck_pixels"]["mean"], "lower"),
 ]
 
 
@@ -179,7 +205,9 @@ def main() -> None:
     ap.add_argument("--run", action="append", required=True, metavar="LABEL=PATH",
                     help="a run to measure (repeatable)")
     ap.add_argument("--table", type=Path, help="write a markdown comparison table here")
-    ap.add_argument("--title", default="Matte quality", help="heading for the table file")
+    ap.add_argument("--title", default="Matte quality", help="heading for this section")
+    ap.add_argument("--append", action="store_true",
+                    help="append this section to --table instead of replacing the file")
     ap.add_argument("--no-json", action="store_true",
                     help="do not write metrics.json beside each run")
     args = ap.parse_args()
@@ -199,7 +227,7 @@ def main() -> None:
               f"flicker mean {m['area_change_pct']['mean']:.2f}%  "
               f"IoU min {m['iou_consecutive']['min']:.3f}  "
               f"soft {100 * m['softness']['soft_pixel_fraction_mean']:.3f}%  "
-              f"components mean {m['components']['mean']:.2f}")
+              f"sig-components mean {m['components']['significant_mean']:.2f}")
         if not args.no_json:
             out = d.parent / "metrics.json"
             out.write_text(json.dumps(m, indent=2) + "\n")
@@ -209,11 +237,14 @@ def main() -> None:
     print("\n" + md)
     if args.table:
         args.table.parent.mkdir(parents=True, exist_ok=True)
-        args.table.write_text(
-            f"# {args.title}\n\n"
+        preamble = (
             "Generated by `src/metrics.py`. Shape metrics binarise at alpha > 127 so a soft\n"
-            "matte and a binary one are compared on the same footing.\n\n"
-            + md + "\n")
+            "matte and a binary one are compared on the same footing.\n\n")
+        if args.append and args.table.exists():
+            with args.table.open("a") as fh:
+                fh.write(f"\n## {args.title}\n\n" + md + "\n")
+        else:
+            args.table.write_text(f"# {args.title}\n\n" + preamble + md + "\n")
         print(f"\n[metrics] table -> {args.table}")
 
 

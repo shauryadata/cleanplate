@@ -18,6 +18,34 @@ license; nothing here is relicensed by inclusion.
 - Citation:
   > Ravi et al., *SAM 2: Segment Anything in Images and Videos*, arXiv:2408.00714, 2024.
 
+### MatAnyone — Nanyang Technological University, S-Lab
+- Source: https://github.com/pq-yang/MatAnyone
+- **License: S-Lab License 1.0 — NON-COMMERCIAL USE ONLY.** Verified by reading
+  `LICENSE` at the repository root: "Redistribution and use **for non-commercial
+  purpose** in source and binary forms ... are permitted". Commercial use requires
+  written permission from the authors. GitHub reports the licence as `NOASSERTION`
+  because it is a custom licence, not an SPDX-recognised one.
+- **This is why MatAnyone is not bundled.** CleanPlate's own code is MIT and must stay
+  usable commercially. MatAnyone is therefore an *optional* stage: it is cloned into
+  `vendor/matanyone/` (gitignored) by `scripts/download.sh`, driven through a thin
+  adapter (`src/refine_matte.py`), and no MatAnyone code or weights enter this
+  repository. CleanPlate runs without it and produces the binary SAM 2 matte.
+  Anyone needing a commercially-usable soft matte should substitute a permissively
+  licensed matting model — see `docs/DECISIONS.md` for the ViTMatte fallback.
+- Used for: refining SAM 2's binary mask into a soft alpha with temporal propagation.
+- Weights: `matanyone.pth` (135 MB), from the project's GitHub release v1.0.0, under the
+  same S-Lab 1.0 terms. Not committed.
+- Citation:
+  > Yang et al., *MatAnyone: Stable Video Matting with Consistent Memory Propagation*,
+  > CVPR 2025, arXiv:2501.14677.
+
+### torchvision ImageNet backbone weights (ResNet-50, ResNet-18)
+- Downloaded automatically by MatAnyone on first run to `~/.cache/torch/hub/checkpoints/`
+  (`resnet50-19c8e357.pth`, `resnet18-5c106cde.pth`; ~143 MB combined).
+- Source: https://download.pytorch.org/models/ — part of torchvision.
+- License: BSD-3-Clause (torchvision).
+- Not committed; outside the repository tree entirely.
+
 ### PyTorch / torchvision
 - Source: https://github.com/pytorch/pytorch
 - License: BSD-3-Clause.
@@ -33,6 +61,11 @@ license; nothing here is relicensed by inclusion.
 ### NumPy
 - Source: https://github.com/numpy/numpy
 - License: BSD-3-Clause.
+
+### SciPy
+- Source: https://github.com/scipy/scipy
+- License: BSD-3-Clause.
+- Used for connected-component analysis in `src/metrics.py`.
 
 ### Matplotlib
 - Source: https://github.com/matplotlib/matplotlib

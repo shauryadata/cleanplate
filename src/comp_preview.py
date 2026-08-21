@@ -29,6 +29,13 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def rel(p: Path) -> str:
+    try:
+        return str(p.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(p)
+
+
 def font(size: int) -> ImageFont.FreeTypeFont:
     try:
         import matplotlib
@@ -88,13 +95,15 @@ def encode(frames_dir: Path, out: Path, fps: float) -> None:
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
         sys.exit(f"ffmpeg failed:\n{p.stderr[-3000:]}")
-    print(f"[comp] {out.relative_to(ROOT)}  ({out.stat().st_size / 1e6:.1f} MB)")
+    print(f"[comp] {rel(out)}  ({out.stat().st_size / 1e6:.1f} MB)")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--shot", required=True)
+    ap.add_argument("--out-name", default=None,
+                    help="read/write under outputs/<out-name>/ (default: the shot name)")
     ap.add_argument("--bg-image", type=Path, help="background plate (default: the only "
                                                   "image in outputs/<shot>/backgrounds/)")
     ap.add_argument("--color", type=hex_rgb, default="#D4571E", metavar="#RRGGBB",
@@ -104,15 +113,22 @@ def main() -> None:
                     help="crop the plate before cover-fitting, e.g. to cut the black "
                          "stitching borders off a stitched panorama")
     ap.add_argument("--fps", type=float, default=24.0)
+    ap.add_argument("--compare-with", metavar="RUN",
+                    help="also render a 2x2 comparison against another run's matte and "
+                         "comp, e.g. --compare-with walk. Top row mattes, bottom row "
+                         "comps, left = that run, right = this one.")
+    ap.add_argument("--compare-labels", nargs=2, default=["v1", "v2"],
+                    metavar=("OLD", "NEW"), help="labels for the 2x2 comparison")
     ap.add_argument("--keep-frames", action="store_true",
                     help="keep the intermediate side-by-side PNGs")
     args = ap.parse_args()
 
-    out_root = ROOT / "outputs" / args.shot
+    out_root = ROOT / "outputs" / (args.out_name or args.shot)
     rgba_dir = out_root / "rgba"
     frames_dir = ROOT / "shots" / args.shot / "frames"
     if not rgba_dir.is_dir():
-        sys.exit(f"no RGBA sequence: {rgba_dir}\nRun src/export_rgba.py --shot {args.shot}")
+        sys.exit(f"no RGBA sequence: {rgba_dir}\nRun src/export_rgba.py --shot {args.shot} "
+                 f"--out-name {args.out_name or args.shot}")
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg not found on PATH")
 
@@ -125,10 +141,10 @@ def main() -> None:
                  if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
         if len(cands) != 1:
             sys.exit("pass --bg-image (found "
-                     f"{len(cands)} candidates in outputs/{args.shot}/backgrounds/)")
+                     f"{len(cands)} candidates in {rel(out_root / 'backgrounds')})")
         bg_path = cands[0]
     print(f"[comp] shot={args.shot}  {len(rgbas)} frames at {size[0]}x{size[1]}")
-    print(f"[comp] plate: {bg_path.relative_to(ROOT)}")
+    print(f"[comp] plate: {rel(bg_path)}")
     print(f"[comp] flat colour: #{''.join(f'{c:02X}' for c in args.color)}")
 
     plate_src = Image.open(bg_path).convert("RGB")
@@ -166,14 +182,44 @@ def main() -> None:
         strip.paste(label(Image.fromarray(comp), "COMP"), (size[0] * 2, 0))
         strip.save(dirs["_sbs"] / f"{idx:05d}.png")
 
+    if args.compare_with:
+        other = ROOT / "outputs" / args.compare_with
+        o_alpha = other / "alpha" if (other / "alpha").is_dir() else other / "masks"
+        o_comp = other / "comp_image"
+        missing = [str(d) for d in (o_alpha, o_comp) if not d.is_dir()]
+        if missing:
+            sys.exit(f"--compare-with {args.compare_with}: missing {missing}. "
+                     "Run export_rgba.py and comp_preview.py for that run first.")
+        cmp_dir = out_root / "_cmp"
+        if cmp_dir.exists():
+            shutil.rmtree(cmp_dir)
+        cmp_dir.mkdir(parents=True)
+        old_lab, new_lab = args.compare_labels
+        for p2 in rgbas:
+            idx = int(p2.stem)
+            oa = Image.open(o_alpha / f"{idx:05d}.png").convert("L").convert("RGB")
+            na = Image.open(rgba_dir / f"{idx:05d}.png").convert("RGBA").getchannel("A")
+            na = na.convert("RGB")
+            oc = Image.open(o_comp / f"{idx:05d}.png").convert("RGB")
+            nc = Image.open(dirs["comp_image"] / f"{idx:05d}.png").convert("RGB")
+            grid = Image.new("RGB", (size[0] * 2, size[1] * 2))
+            grid.paste(label(oa, f"{old_lab}  MATTE"), (0, 0))
+            grid.paste(label(na, f"{new_lab}  MATTE"), (size[0], 0))
+            grid.paste(label(oc, f"{old_lab}  COMP"), (0, size[1]))
+            grid.paste(label(nc, f"{new_lab}  COMP"), (size[0], size[1]))
+            grid.save(cmp_dir / f"{idx:05d}.png")
+        encode(cmp_dir, out_root / f"{old_lab}_vs_{new_lab}.mp4", args.fps)
+        if not args.keep_frames:
+            shutil.rmtree(cmp_dir)
+
     encode(dirs["comp_image"], out_root / "comp.mp4", args.fps)
     encode(dirs["comp_solid"], out_root / "comp_solid.mp4", args.fps)
     encode(dirs["_sbs"], out_root / "side_by_side.mp4", args.fps)
 
     if not args.keep_frames:
         shutil.rmtree(dirs["_sbs"])
-    print(f"[comp] comp frames kept in {dirs['comp_image'].relative_to(ROOT)} and "
-          f"{dirs['comp_solid'].relative_to(ROOT)}")
+    print(f"[comp] comp frames kept in {rel(dirs['comp_image'])} and "
+          f"{rel(dirs['comp_solid'])}")
 
 
 if __name__ == "__main__":

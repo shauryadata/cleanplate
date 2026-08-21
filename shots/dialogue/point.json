@@ -1,0 +1,8 @@
+{
+  "shot": "dialogue",
+  "image_size": [960, 400],
+  "prompts": [
+    { "frame": 0, "positive": [[620, 230]], "negative": [] }
+  ],
+  "_note": "Celia, the right-hand figure in the teal jacket. Two actors are in frame; a single click on her torso holds her alone for all 96 frames. The bridge railing occludes her into ~3 connected components throughout, which is correct, not fragmentation."
+}

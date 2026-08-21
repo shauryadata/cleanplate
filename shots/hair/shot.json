@@ -1,0 +1,20 @@
+{
+  "name": "hair",
+  "source_movie": "shots/source/tears_of_steel_1080p.webm",
+  "source_url": "https://media.xiph.org/tearsofsteel/tears_of_steel_1080p.webm",
+  "credit": "(CC) Blender Foundation | mango.blender.org",
+  "start": "177.0",
+  "duration_s": 4.0,
+  "fps": 24.0,
+  "frame_count": 96,
+  "resolution": [
+    960,
+    400
+  ],
+  "source_resolution": [
+    1920,
+    800
+  ],
+  "source_fps": "24/1",
+  "ffmpeg_cmd": "ffmpeg -hide_banner -loglevel error -y -ss 177.0 -i /Users/shauryadityasingh/Downloads/clean-plate/shots/source/tears_of_steel_1080p.webm -t 4.0 -vf fps=24.0,scale=960:-2:flags=lanczos -q:v 2 -start_number 0 /Users/shauryadityasingh/Downloads/clean-plate/shots/hair/frames/%05d.jpg"
+}

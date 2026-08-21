@@ -1,0 +1,8 @@
+{
+  "shot": "hair",
+  "image_size": [960, 400],
+  "prompts": [
+    { "frame": 0, "positive": [[660, 320]], "negative": [] }
+  ],
+  "_note": "Old Thom, right-hand figure, click on the plaid shirt at chest height. Chosen as the hardest edge case: long backlit white hair against a dark interior."
+}

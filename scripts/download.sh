@@ -20,6 +20,13 @@ SAM2_DIR="vendor/sam2"
 CKPT_BASE="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
 CKPT_NAME="sam2.1_hiera_small.pt"
 
+# MatAnyone: optional soft-matte stage. S-Lab License 1.0, NON-COMMERCIAL only.
+# Deliberately not vendored - see THIRD_PARTY.md and docs/DECISIONS.md.
+MATANYONE_REPO="https://github.com/pq-yang/MatAnyone.git"
+MATANYONE_DIR="vendor/matanyone"
+MATANYONE_CKPT_URL="https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth"
+MATANYONE_CKPT="checkpoints/matanyone.pth"
+
 PY="${PY:-$ROOT/.venv/bin/python}"
 [ -x "$PY" ] || PY="python3"
 
@@ -69,12 +76,40 @@ fetch_checkpoints() {
   log "checkpoint -> checkpoints/$CKPT_NAME"
 }
 
+fetch_matanyone() {
+  mkdir -p vendor checkpoints
+  log "MatAnyone is licensed S-Lab 1.0 - NON-COMMERCIAL USE ONLY. See THIRD_PARTY.md."
+  if [ -d "$MATANYONE_DIR/.git" ]; then
+    log "MatAnyone already cloned at $MATANYONE_DIR"
+  else
+    log "cloning MatAnyone"
+    git clone --depth 1 "$MATANYONE_REPO" "$MATANYONE_DIR"
+    # 70 MB of demo videos and stills we never use
+    rm -rf "$MATANYONE_DIR/inputs" "$MATANYONE_DIR/assets"
+  fi
+  # Its pyproject demands PySide6, gradio, tensorboard, pycocotools, netifaces and
+  # cchardet (abandoned; fails to build on py3.11+), none of which inference imports.
+  log "installing MatAnyone without its dependency wall"
+  "$PY" -m pip install --no-deps -e "$MATANYONE_DIR"
+  "$PY" -m pip install einops safetensors huggingface_hub scipy imageio requests
+  if [ -s "$MATANYONE_CKPT" ]; then
+    log "MatAnyone checkpoint already present"
+  else
+    log "downloading matanyone.pth (~135 MB)"
+    curl -fL --retry 3 --progress-bar -o "$MATANYONE_CKPT.part" "$MATANYONE_CKPT_URL"
+    mv "$MATANYONE_CKPT.part" "$MATANYONE_CKPT"
+  fi
+  log "note: the first refine run also pulls ResNet-50/18 ImageNet weights (~143 MB)"
+  log "      into ~/.cache/torch/hub/checkpoints/ (torchvision, BSD-3-Clause)."
+}
+
 case "${1:-all}" in
   footage)     fetch_footage ;;
   sam2)        fetch_sam2 ;;
   checkpoints) fetch_checkpoints ;;
-  all)         fetch_footage; fetch_sam2; fetch_checkpoints ;;
-  *)           echo "usage: $0 [footage|sam2|checkpoints|all]" >&2; exit 2 ;;
+  matanyone)   fetch_matanyone ;;
+  all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone ;;
+  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|all]" >&2; exit 2 ;;
 esac
 
 log "done."
