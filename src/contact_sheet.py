@@ -78,11 +78,12 @@ def from_movie(movie: Path, every: float, thumb_w: int, cols: int,
     return out
 
 
-def from_shot(shot: str, step: int, thumb_w: int) -> list[tuple[Image.Image, str]]:
-    frames_dir = ROOT / "shots" / shot / "frames"
+def from_dir(frames_dir: Path, step: int) -> list[tuple[Image.Image, str]]:
     if not frames_dir.is_dir():
-        sys.exit(f"no such shot folder: {frames_dir}")
-    frames = sorted(frames_dir.glob("*.jpg"), key=lambda p: int(p.stem))
+        sys.exit(f"no such folder: {frames_dir}")
+    frames = sorted((q for q in frames_dir.iterdir()
+                     if q.suffix.lower() in (".jpg", ".jpeg", ".png")),
+                    key=lambda q: int(q.stem))
     if not frames:
         sys.exit(f"no frames in {frames_dir}")
     picked = frames[::step]
@@ -95,6 +96,9 @@ def main() -> None:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--movie", type=Path, help="scout mode: sample a whole movie")
     g.add_argument("--shot", help="review mode: sample shots/<name>/frames")
+    g.add_argument("--dir", type=Path,
+                   help="review mode: sample any folder of numbered frames "
+                        "(e.g. outputs/walk/overlay)")
     ap.add_argument("--every", type=float, default=5.0, help="scout: seconds between thumbs")
     ap.add_argument("--start", type=float, default=0.0, help="scout: start second")
     ap.add_argument("--end", type=float, default=None, help="scout: end second")
@@ -108,7 +112,8 @@ def main() -> None:
         imgs = from_movie(args.movie, args.every, args.thumb_width, args.cols,
                           args.start, args.end)
     else:
-        imgs = from_shot(args.shot, args.step, args.thumb_width)
+        d = args.dir if args.dir else ROOT / "shots" / args.shot / "frames"
+        imgs = from_dir(d, args.step)
 
     sheet = tile(imgs, args.cols, args.thumb_width)
     args.out.parent.mkdir(parents=True, exist_ok=True)
