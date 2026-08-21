@@ -1,0 +1,36 @@
+# --- Never commit large binaries: footage, weights, venv, outputs ---
+
+# Python environment
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Vendored upstream source (re-fetched by scripts/download.sh)
+vendor/
+
+# Model weights
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+
+# Footage: source movie and extracted frame folders
+shots/
+!shots/.gitkeep
+
+# Generated mattes, RGBA sequences, comps
+outputs/
+!outputs/.gitkeep
+
+# Media formats, wherever they land
+*.mov
+*.mp4
+*.webm
+*.mkv
+*.zip
+*.exr
+
+# macOS
+.DS_Store
