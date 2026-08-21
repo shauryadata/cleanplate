@@ -7,10 +7,14 @@ u / backspace = undo the last point
 Enter or closing the window = finish
 
 Prints a ready-to-paste ``track_matte.py`` invocation and, unless --no-save,
-writes the points to ``shots/<name>/point.json`` so track_matte can pick them
+merges the points into ``shots/<name>/point.json`` so track_matte can pick them
 up with no arguments at all.
 
-    python src/pick_point.py --shot walk
+Clicks are stored per frame, so you can come back and add a corrective click on a
+later frame without losing the first-frame prompt:
+
+    python src/pick_point.py --shot walk              # positive click on frame 0
+    python src/pick_point.py --shot walk --frame 67   # right-click the intruding patch
 """
 from __future__ import annotations
 
@@ -28,6 +32,8 @@ def main() -> None:
     ap.add_argument("--shot", required=True, help="shot name under shots/")
     ap.add_argument("--frame", type=int, default=0, help="frame index to click on (default 0)")
     ap.add_argument("--no-save", action="store_true", help="print only, do not write point.json")
+    ap.add_argument("--replace", action="store_true",
+                    help="drop every existing prompt instead of merging this frame in")
     args = ap.parse_args()
 
     frames_dir = ROOT / "shots" / args.shot / "frames"
@@ -104,27 +110,37 @@ def main() -> None:
     pos = [(x, y) for x, y, lab in points if lab == 1]
     neg = [(x, y) for x, y, lab in points if lab == 0]
 
-    print(f"\n[pick] {len(pos)} positive, {len(neg)} negative")
+    print(f"\n[pick] {len(pos)} positive, {len(neg)} negative on frame {args.frame}")
     cmd = ["python src/track_matte.py", f"--shot {args.shot}"]
     for x, y in pos:
-        cmd.append(f"--point {x},{y}")
+        cmd.append(f"--point {x},{y}" if args.frame == 0 else f"--at {args.frame}:{x},{y}:+")
     for x, y in neg:
-        cmd.append(f"--neg {x},{y}")
-    if args.frame:
-        cmd.append(f"--prompt-frame {args.frame}")
+        cmd.append(f"--neg {x},{y}" if args.frame == 0 else f"--at {args.frame}:{x},{y}:-")
     print("\n" + " \\\n    ".join(cmd) + "\n")
 
-    if not args.no_save:
-        out = ROOT / "shots" / args.shot / "point.json"
-        out.write_text(json.dumps({
-            "shot": args.shot,
-            "prompt_frame": args.frame,
-            "image_size": [w, h],
-            "positive": pos,
-            "negative": neg,
-        }, indent=2) + "\n")
-        print(f"[pick] saved -> {out.relative_to(ROOT)}")
-        print(f"[pick] track_matte.py --shot {args.shot} will read it automatically.")
+    if args.no_save:
+        return
+
+    out = ROOT / "shots" / args.shot / "point.json"
+    doc = {"shot": args.shot, "image_size": [w, h], "prompts": []}
+    if out.exists() and not args.replace:
+        prev = json.loads(out.read_text())
+        if "prompts" in prev:
+            doc["prompts"] = [e for e in prev["prompts"] if int(e["frame"]) != args.frame]
+        elif prev.get("positive") or prev.get("negative"):
+            f0 = int(prev.get("prompt_frame", 0))          # migrate the Task 1 format
+            if f0 != args.frame:
+                doc["prompts"].append({"frame": f0,
+                                       "positive": prev.get("positive", []),
+                                       "negative": prev.get("negative", [])})
+    doc["prompts"].append({"frame": args.frame, "positive": [list(p) for p in pos],
+                           "negative": [list(p) for p in neg]})
+    doc["prompts"].sort(key=lambda e: int(e["frame"]))
+    out.write_text(json.dumps(doc, indent=2) + "\n")
+    print(f"[pick] saved -> {out.relative_to(ROOT)}  "
+          f"({len(doc['prompts'])} prompt frame(s): "
+          f"{[e['frame'] for e in doc['prompts']]})")
+    print(f"[pick] track_matte.py --shot {args.shot} will read it automatically.")
 
 
 if __name__ == "__main__":
