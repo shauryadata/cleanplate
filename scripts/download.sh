@@ -47,6 +47,12 @@ fetch_sam2() {
     log "cloning SAM 2"
     git clone --depth 1 "$SAM2_REPO" "$SAM2_DIR"
   fi
+  # SAM 2's setup.py optionally builds a CUDA extension. Skip it on machines
+  # without an NVIDIA toolchain (Apple Silicon, CPU-only) so the install succeeds.
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    export SAM2_BUILD_CUDA=0
+    log "no nvidia-smi found -> SAM2_BUILD_CUDA=0"
+  fi
   log "pip install -e $SAM2_DIR"
   "$PY" -m pip install -e "$SAM2_DIR"
 }

@@ -17,11 +17,11 @@ checkpoints/
 *.safetensors
 
 # Footage: source movie and extracted frame folders
-shots/
+shots/*
 !shots/.gitkeep
 
 # Generated mattes, RGBA sequences, comps
-outputs/
+outputs/*
 !outputs/.gitkeep
 
 # Media formats, wherever they land
