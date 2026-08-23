@@ -96,53 +96,74 @@ same frame.
 
 ## Checkpoint 6 — cold-clone ship test
 
-Run in a fresh `mktemp -d`, nothing reused from the dev checkout.
+Run in a fresh `mktemp -d`, against the pushed commit, nothing reused from the dev
+checkout. Transcript as executed:
 
 ```
+$ cd /tmp/cleanplate-ship2-9FJEHD
 $ df -h . | tail -1
-/dev/disk3s5   460Gi   311Gi   120Gi    73%
+/dev/disk3s5   460Gi   315Gi   116Gi    74%
 $ python3 --version
 Python 3.12.7
 $ ffmpeg -version | head -1
 ffmpeg version 8.1
 
 $ git clone https://github.com/shauryadata/cleanplate.git
-$ cd cleanplate && du -sh .
-464K    .
+$ cd cleanplate && git log --oneline -1
+68ab1c5 Task 3 ckpt6: cold-clone ship test, docs assets, near-click warning
+$ du -sh .
+7.0M    .
+
+$ ls shots/walk
+point.json
+shot.json
+$ ls shots/walk/frames | wc -l          # footage is gitignored
+0
 
 $ python3 -m venv .venv
 $ .venv/bin/pip install -r requirements.txt
-Successfully installed ... gradio-6.25.0 ... torch-2.13.0 torchvision-0.28.0 ...
-
 $ .venv/bin/python -c "import torch, gradio; ..."
 torch 2.13.0 | mps True | gradio 6.25.0
 
 $ ./scripts/download.sh all
-==> footage -> shots/source/tears_of_steel_1080p.webm
-==> cloning SAM 2 ... pip install -e vendor/sam2
-==> checkpoint -> checkpoints/sam2.1_hiera_small.pt
-==> MatAnyone is licensed S-Lab 1.0 - NON-COMMERCIAL USE ONLY. See THIRD_PARTY.md.
-==> downloading matanyone.pth (~135 MB)
-==> done.
-
 $ du -sh shots/source checkpoints vendor .venv
-560M    shots/source
-321M    checkpoints
-198M    vendor
+545M    shots/source          # tears_of_steel_1080p.webm
+311M    checkpoints           # sam2.1_hiera_small.pt 176M + matanyone.pth 135M
+198M    vendor                # sam2 + matanyone checkouts
 1.2G    .venv
+$ .venv/bin/python -c "import sam2, matanyone; print('importable')"
+importable
 
-$ .venv/bin/python app.py
+$ .venv/bin/python app.py --port 7880
   CleanPlate v0.3.0 — local only, no uploads, no telemetry
-  http://127.0.0.1:7860
+  http://127.0.0.1:7880
 ```
 
-The clone had **zero frames** on disk — footage is gitignored, only `shot.json` and
-`point.json` are committed. Clicking **Load demo shot (walk)** in the browser cut the
-shot out of the source movie with ffmpeg and produced 96 frames, then Run Track produced
-a matte. **No CLI was touched.** Every screenshot in this report was captured from that
-cold-clone install.
+Then, in the browser, with **no CLI**:
 
-Total install: about 2.3 GB of downloads on top of a 464 KB clone.
+```
+  page title: CleanPlate
+  Load demo shot -> 96 frames extracted
+  status: Loaded walk — 96 frames. Restored 5 saved click(s) on frames [0, 67]
+          from point.json.
+  clicked the actor at plate (360,200)
+  Run Track   -> Tracked 96 frames in 73.03s (0.761 s/frame, 1.31 fps) on mps.
+                 MPS fallback ops: none.
+  Run Refine  -> Refined 96 frames in 15.85s (0.165 s/frame, 6.06 fps) on mps.
+                 Soft pixels: 0.791% of frame (binary matte is exactly 0%).
+
+$ ls shots/walk/frames | wc -l          # after clicking Load demo shot
+96
+```
+
+The clone shipped **zero frames**. Clicking **Load demo shot (walk)** cut the shot out of
+the source movie with ffmpeg from the committed `shot.json`, then one click and Run Track
+produced a matte. Total install: about 2.3 GB of downloads on top of a 7 MB clone.
+
+Two harness bugs worth recording, both mine and neither in the product: `set -eo pipefail`
+killed the script on a deliberate `ls` of a missing directory, and again on
+`download.sh ... | grep '^==>'`, which matches nothing because `download.sh` colour-codes
+that prefix. The install had in fact completed both times.
 
 ## UX gaps found while using it, ranked
 
