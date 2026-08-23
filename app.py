@@ -38,6 +38,7 @@ from cleanplate.session import Prompt                                    # noqa:
 
 DEMO_SHOT = "walk"
 CHANGED_IOU = 0.99            # below this, a frame counts as changed by a re-run
+NEAR_CLICK_PX = 12            # warn when a new click lands this close to an existing one
 VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
 
@@ -52,15 +53,25 @@ CSS = """
 #cp-head .badge { font-size:.7rem; letter-spacing:.06em; text-transform:uppercase;
                   border:1px solid #2c6e49; color:#7ee2a8; background:#12241a;
                   padding:.16rem .5rem; border-radius:999px; margin-left:auto; }
-.cp-hint { color:var(--cp-dim); font-size:.82rem; line-height:1.45; }
-.cp-warn { border-left:3px solid #d97706; padding:.55rem .8rem; background:#241c0c;
-           border-radius:4px; font-size:.85rem; line-height:1.5; }
-.cp-bad  { border-left:3px solid #b91c1c; padding:.55rem .8rem; background:#2a1414;
-           border-radius:4px; font-size:.85rem; line-height:1.5; }
-.cp-ok   { border-left:3px solid #2c6e49; padding:.55rem .8rem; background:#12241a;
-           border-radius:4px; font-size:.85rem; line-height:1.5; }
-.cp-cached { border-left:3px solid #6366f1; padding:.55rem .8rem; background:#181a2e;
-             border-radius:4px; font-size:.85rem; }
+/* Callouts must be legible in BOTH themes. Gradio follows the viewer's
+   prefers-color-scheme, and a dark panel with inherited dark text made the
+   retroactive-change warning - the single most important message in the app -
+   unreadable in light mode. */
+.cp-hint { color:#5b6373; font-size:.82rem; line-height:1.45; }
+.cp-warn, .cp-bad, .cp-ok, .cp-cached {
+    padding:.55rem .8rem; border-radius:4px; font-size:.85rem; line-height:1.5; }
+.cp-warn   { border-left:3px solid #d97706; background:#fff6e5; color:#7a4a04; }
+.cp-bad    { border-left:3px solid #b91c1c; background:#fdeceb; color:#8a1616; }
+.cp-ok     { border-left:3px solid #2c6e49; background:#e9f7ef; color:#14532d; }
+.cp-cached { border-left:3px solid #6366f1; background:#eef0fe; color:#312e81; }
+.cp-warn b, .cp-bad b, .cp-ok b { color:inherit; }
+@media (prefers-color-scheme: dark) {
+  .cp-hint   { color:#8b93a7; }
+  .cp-warn   { background:#241c0c; color:#f2d9a6; }
+  .cp-bad    { background:#2a1414; color:#f6bcbc; }
+  .cp-ok     { background:#12241a; color:#a9e9c6; }
+  .cp-cached { background:#181a2e; color:#c7c9f7; }
+}
 /* six tabs must fit without an overflow menu - the Changes tab is the point of
    the app and must not hide behind a "..." */
 button.tab-nav-button, .tab-nav button { padding-left:.55rem !important;
@@ -245,11 +256,20 @@ def on_click(st: dict, idx: float, mode: str, click_mode: str,
         raise gr.Error("Switch the view to Plate or Matte overlay to place points — "
                        "the other views are not in plate coordinates.")
     x, y = int(evt.index[0]), int(evt.index[1])
-    st["prompt"].add(int(idx), x, y, positive=click_mode.startswith("Keep"))
+    near = st["prompt"].nearest(int(idx), x, y)
+    keep = click_mode.startswith("Keep")
+    st["prompt"].add(int(idx), x, y, positive=keep)
+    msg = (f"{'Keep' if keep else 'Exclude'} point at ({x}, {y}) on "
+           f"frame {int(idx)}.")
+    if near and near[0] <= NEAR_CLICK_PX:
+        msg += (f"\n\n<div class='cp-warn'><b>That is {near[0]:.0f}px from an existing "
+                f"<i>{near[1]}</i> point on this frame.</b> Near-coincident points do "
+                "not reinforce each other in SAM&nbsp;2 — they change which mask "
+                "hypothesis wins, and can shrink the matte sharply. On this shot a "
+                "duplicate keep point 1px away cut the matte by 34%. Undo it unless you "
+                "meant it.</div>")
     return (st, render(st, idx, mode, bgc, bgcol, bgimg),
-            points_table(st), prompt_summary(st),
-            f"{'Keep' if click_mode.startswith('Keep') else 'Exclude'} point at "
-            f"({x}, {y}) on frame {int(idx)}.")
+            points_table(st), prompt_summary(st), msg)
 
 
 def on_undo(st, idx, mode, bgc, bgcol, bgimg):
@@ -551,9 +571,10 @@ def build() -> gr.Blocks:
                                      interactive=True)
                 viewer_img = gr.Image(label="Frame", type="numpy", height=470,
                                       format="png", interactive=False,
+                                      elem_id="cp-viewer",
                                       buttons=["download", "fullscreen"])
                 frame_slider = gr.Slider(0, 1, value=0, step=1, label="Frame",
-                                         interactive=False)
+                                         elem_id="cp-frame", interactive=False)
                 status = gr.Markdown("")
 
             # ---------------- controls

@@ -1,0 +1,4 @@
+# Development-only. NOT needed to run CleanPlate.
+# Used by scripts/make_docs_assets.py to generate the README screenshots and GIF
+# from the live app, so the docs images are reproducible rather than hand-made.
+playwright>=1.40

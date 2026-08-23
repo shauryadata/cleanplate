@@ -56,6 +56,25 @@ class Prompt:
                 return p
         return None
 
+    def nearest(self, frame: int, x: int, y: int) -> tuple[float, str] | None:
+        """Distance to the closest existing click on this frame, and its kind.
+
+        Two near-coincident positive points do NOT reinforce each other in SAM 2 -
+        they change which mask hypothesis wins. Measured on the walk shot, a second
+        keep point one pixel from the first shrank the matte by 34% on average
+        (minimum frame area 8.87% -> 1.96%). Callers should warn.
+        """
+        e = self.frames.get(frame)
+        if not e:
+            return None
+        best = None
+        for pts, kind in ((e.positive, "keep"), (e.negative, "exclude")):
+            for px, py in pts:
+                d = ((px - x) ** 2 + (py - y) ** 2) ** 0.5
+                if best is None or d < best[0]:
+                    best = (d, kind)
+        return best
+
     def clear_frame(self, frame: int) -> None:
         self.frames.pop(frame, None)
 

@@ -62,6 +62,24 @@ license; nothing here is relicensed by inclusion.
 - Source: https://github.com/numpy/numpy
 - License: BSD-3-Clause.
 
+### Gradio
+- Source: https://github.com/gradio-app/gradio
+- License: Apache License 2.0.
+- Used for the local web app (`app.py`). Pinned to `6.25.0` in `requirements.txt`:
+  the API moves between majors (in 6.x `theme` and `css` moved from `Blocks()` to
+  `launch()`, and `gr.Image` lost `show_download_button`).
+- Note: Gradio collects analytics by default. CleanPlate disables it three ways -
+  `analytics_enabled=False`, `GRADIO_ANALYTICS_ENABLED=False`, and never calling
+  `share=True`. The Image component's default "share to Hugging Face Spaces
+  Discussions" button is also removed.
+
+### Playwright  (development only)
+- Source: https://github.com/microsoft/playwright-python
+- License: Apache License 2.0.
+- Listed in `requirements-dev.txt`, not `requirements.txt`. Used only by
+  `scripts/make_docs_assets.py` and `scripts/capture_retroactive_demo.py` to generate
+  the README screenshots from the live app. Not needed to run CleanPlate.
+
 ### SciPy
 - Source: https://github.com/scipy/scipy
 - License: BSD-3-Clause.

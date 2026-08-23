@@ -7,26 +7,48 @@ Apple Silicon (MPS), CUDA, or CPU.
 
 ## Status
 
-**Task 2 — from cutout to key: done.** The binary matte is now a soft key with despill,
-corrective clicks kill flicker at its source, and every claim is measured.
+**Task 3 — the app: done.** The CLI pipeline is now a local web app. One command, load
+a clip, click the subject, get a matte, correct it, export.
+
+```bash
+python app.py
+```
+
+![CleanPlate walkthrough](docs/img/walkthrough.gif)
 
 | | |
 |---|---|
-| Device | Apple M3 Pro, MPS — **zero fallback ops in either stage** |
-| Track (SAM 2.1 hiera-small) | 0.896 s/frame (1.12 fps) |
-| Refine (MatAnyone v1.0.0) | 0.161 s/frame (6.21 fps) |
-| Alpha | 256 levels, ~0.8–1.1 % of frame fractional (was 2 levels, 0 %) |
-| Flicker on `walk` | mean −15.5 %, max −35.9 % |
-| Pavement bleed | −93 % from one corrective negative click |
-| Shots | `walk`, `dialogue`, `hair` — the RotoBench seed |
+| Device | Apple M3 Pro, MPS — **zero fallback ops in either model stage** |
+| Track (SAM 2.1 hiera-small) | ~0.82 s/frame (1.2 fps) |
+| Refine (MatAnyone) | ~0.13 s/frame (7.9 fps) |
+| RGBA + despill | ~0.007 s/frame |
+| Whole 96-frame shot, in the app | about 95 s |
 
-Hair is an honest partial negative: the silhouette is soft, but no interior strand
-transparency is recovered (soft pixels sit a median of 2 px from the solid core). Read
-[docs/TASK2_REPORT.md](docs/TASK2_REPORT.md) for the full assessment,
-[docs/METRICS.md](docs/METRICS.md) for the tables, and
-[docs/DECISIONS.md](docs/DECISIONS.md) for why MatAnyone.
+Earlier tasks: [Task 1](docs/TASK1_REPORT.md) (one-click matte),
+[Task 2](docs/TASK2_REPORT.md) (soft alpha, metrics), [Task 3](docs/TASK3_REPORT.md)
+(this app). Decisions in [DECISIONS.md](docs/DECISIONS.md), numbers in
+[METRICS.md](docs/METRICS.md).
 
 RotoBench — a public benchmark of AI matte quality — comes in a later phase.
+
+## Local by design
+
+CleanPlate never sends your footage anywhere. That is a product decision, not an
+oversight, and it is enforced rather than promised:
+
+- **No uploads.** Frames, mattes and comps are read and written on your disk. The
+  browser talks to a server on your own machine.
+- **No share link.** `share=False`; Gradio's public tunnel is never created.
+- **Loopback only.** The server binds `127.0.0.1` by default, so it is not reachable
+  from your network.
+- **No telemetry.** `analytics_enabled=False` on the app, plus
+  `GRADIO_ANALYTICS_ENABLED=False` and `HF_HUB_DISABLE_TELEMETRY=1` set before Gradio
+  and the Hugging Face client load.
+- **No "share to Spaces" button.** Gradio's image component ships one by default; it
+  posts to Hugging Face Spaces Discussions, so CleanPlate removes it.
+- **No accounts, no keys, no per-frame billing.** The only network access is the
+  one-time `scripts/download.sh`, which fetches the footage, SAM 2 and the model
+  weights.
 
 ## Pipeline
 
@@ -41,12 +63,42 @@ movie ─► extract_shot ─► pick_point ─► track_matte ─► refine_mat
 `contact_sheet.py` sits alongside these: scout a whole movie for shots, or review any
 folder of numbered frames (source, masks, overlays, comps).
 
+## The app
+
+![Click prompting](docs/img/03_prompt.png)
+
+Click the subject on any frame. Green keeps, red excludes, and every point is listed
+per frame. Run Track propagates it through the shot with live progress.
+
+![Changes tab](docs/img/09_changes.png)
+
+The **Changes** tab is the part that does not exist elsewhere. After a re-run it diffs
+against the previous run frame by frame and, crucially, flags frames that changed
+*before* the frame you corrected. SAM 2 attends to every conditioning frame at every
+timestep, so a corrective click silently redefines the object for the whole shot — this
+is what that looks like when it goes wrong, and the app says so instead of leaving you
+to find it.
+
 ## Quickstart
 
 ```bash
+git clone https://github.com/shauryadata/cleanplate.git && cd cleanplate
 python3 -m venv .venv && source .venv/bin/activate
-pip install torch torchvision opencv-python pillow numpy matplotlib
-./scripts/download.sh          # footage + SAM 2 + checkpoints (nothing large is committed)
+pip install -r requirements.txt
+./scripts/download.sh          # footage + SAM 2 + weights (nothing large is committed)
+python app.py                  # -> http://127.0.0.1:7860
+```
+
+That is the whole install. The app's **Load demo shot (walk)** button cuts the demo
+shot out of the source movie for you, so you never have to touch the CLI.
+
+Verified from a cold clone on a clean machine — the exact transcript is in
+[docs/TASK3_REPORT.md](docs/TASK3_REPORT.md).
+
+<details>
+<summary>Or drive the same pipeline from the CLI</summary>
+
+```bash
 
 # cut a shot out of the movie
 python src/extract_shot.py --name walk --start 270 --duration 4
@@ -73,6 +125,7 @@ python src/comp_preview.py --shot walk --out-name walk_v2 \
 # put numbers on it
 python src/metrics.py --run "v1=outputs/walk/masks" --run "v2=outputs/walk_v2/alpha"
 ```
+</details>
 
 > **Licence note.** The refine stage uses **MatAnyone**, which is **S-Lab License 1.0 —
 > non-commercial use only**. It is never bundled: `scripts/download.sh matanyone` clones it
