@@ -25,8 +25,8 @@ from typing import Callable
 
 import numpy as np
 
-from .ingest import frame_paths
-from .paths import SAM2_CFG, SAM2_CKPT, frames_dir
+from .ingest import frame_paths, resolve_frames_dir
+from .paths import SAM2_CFG, SAM2_CKPT
 from .session import Prompt
 
 MPS_FALLBACK_RE = re.compile(
@@ -65,7 +65,7 @@ def validate_prompt(prompt: Prompt, n_frames: int) -> None:
             "Add a positive click on the subject in the same frame.")
 
 
-def track(shot: str, prompt: Prompt, device: str = "auto",
+def track(shot: "str | object", prompt: Prompt, device: str = "auto",
           progress: ProgressFn = None,
           offload_video_to_cpu: bool = False,
           offload_state_to_cpu: bool = False) -> tuple[np.ndarray, dict]:
@@ -100,7 +100,7 @@ def track(shot: str, prompt: Prompt, device: str = "auto",
             progress(0.05, f"decoding {len(frames)} frames")
         t1 = time.perf_counter()
         state = predictor.init_state(
-            video_path=str(frames_dir(shot)),
+            video_path=str(resolve_frames_dir(shot)),
             offload_video_to_cpu=offload_video_to_cpu,
             offload_state_to_cpu=offload_state_to_cpu)
         t_init = time.perf_counter() - t1
@@ -146,7 +146,7 @@ def track(shot: str, prompt: Prompt, device: str = "auto",
 
     stats = {
         "stage": "track",
-        "shot": shot,
+        "shot": str(shot),
         "device": device,
         "torch": torch.__version__,
         "model_cfg": SAM2_CFG,

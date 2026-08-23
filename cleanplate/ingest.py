@@ -15,12 +15,31 @@ FOOTAGE_CREDIT = "(CC) Blender Foundation | mango.blender.org"
 FOOTAGE_URL = "https://media.xiph.org/tearsofsteel/tears_of_steel_1080p.webm"
 
 
-def frame_paths(shot: str) -> list[Path]:
+def resolve_frames_dir(spec: "str | Path") -> Path:
+    """Accept a shot name (`walk`) or a path to any folder of numbered frames.
+
+    Truth clips live under truth/<name>/frames, outside shots/, so every stage takes
+    a spec rather than assuming the shots/ layout.
+    """
+    p = Path(spec)
+    if (p / "frames").is_dir():          # a clip dir: truth/<name>/frames
+        return p / "frames"
+    if p.is_dir():                       # already a frames dir
+        return p
+    d = frames_dir(str(spec))
+    if d.is_dir():
+        return d
+    raise FileNotFoundError(f"no frames for {spec!r} (tried {d} and {p})")
+
+
+def frame_paths(shot: "str | Path") -> list[Path]:
     """Frames in numeric order. SAM 2 needs integer stems, so we rely on that."""
-    d = frames_dir(shot)
-    if not d.is_dir():
+    try:
+        d = resolve_frames_dir(shot)
+    except FileNotFoundError:
         return []
-    return sorted(d.glob("*.jpg"), key=lambda p: int(p.stem))
+    return sorted((q for q in d.iterdir() if q.suffix.lower() in (".jpg", ".jpeg")),
+                  key=lambda q: int(q.stem))
 
 
 def n_frames(shot: str) -> int:

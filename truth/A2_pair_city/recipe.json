@@ -27,5 +27,16 @@
     "alpha_soft_pixel_fraction": 0.011249,
     "alpha_distinct_values": 256,
     "alpha_coverage_mean": 0.0728
-  }
+  },
+  "oracle_clicks": [
+    [
+      1029,
+      660
+    ],
+    [
+      909,
+      600
+    ]
+  ],
+  "oracle_note": "Two clicks, pinned by hand and visible here. This clip is a woman AND a child, touching, so the reference alpha is one connected blob with one interior peak; the default single-click oracle returns one person against a two-person reference and scores catastrophically (MAD 59, boundary-F 0.18) for a reason that has nothing to do with matte quality. Rather than tune a heuristic until it happens to split them - fitting the benchmark to the pipeline - the clicks are written down. Both are given identically to every method."
 }

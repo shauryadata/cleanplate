@@ -58,3 +58,15 @@ def list_shots(include_unbuilt: bool = True) -> list[str]:
         if is_built(d.name) or (include_unbuilt and (d / "shot.json").exists()):
             out.append(d.name)
     return out
+
+
+def peak_rss_mb() -> float:
+    """Peak resident set size of this process, in MB.
+
+    macOS reports ru_maxrss in bytes, Linux in kilobytes. Long runs on an 18 GB
+    machine need this printed, not guessed.
+    """
+    import resource
+    import sys
+    v = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return v / (1024 ** 2) if sys.platform == "darwin" else v / 1024

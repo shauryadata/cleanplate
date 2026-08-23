@@ -75,7 +75,7 @@ def grad_error(pred: np.ndarray, gt: np.ndarray, sigma: float = 1.4) -> float:
 def boundary_f(pred: np.ndarray, gt: np.ndarray, tol: float | None = None,
                thresh: float = 0.5) -> float:
     """DAVIS-style boundary F-measure on the binarised matte."""
-    from scipy.ndimage import binary_dilation, generate_binary_structure
+    from scipy.ndimage import distance_transform_edt
     p = _as01(pred) > thresh
     g = _as01(gt) > thresh
     h, w = p.shape[-2:]
@@ -96,11 +96,13 @@ def boundary_f(pred: np.ndarray, gt: np.ndarray, tol: float | None = None,
         return 1.0                      # both empty: trivially in agreement
     if not bp.any() or not bg.any():
         return 0.0
-    st = generate_binary_structure(2, 2)
-    bp_d = binary_dilation(bp, st, iterations=r)
-    bg_d = binary_dilation(bg, st, iterations=r)
-    precision = float((bp & bg_d).sum()) / max(int(bp.sum()), 1)
-    recall = float((bg & bp_d).sum()) / max(int(bg.sum()), 1)
+    # One Euclidean distance transform beats r iterations of binary dilation: it is
+    # the correct disk-shaped tolerance rather than an octagon, and at 1920x1080 with
+    # r ~ 18 the iterated version dominated the whole benchmark's runtime.
+    d_to_pred = distance_transform_edt(~bp)
+    d_to_gt = distance_transform_edt(~bg)
+    precision = float((bp & (d_to_gt <= r)).sum()) / max(int(bp.sum()), 1)
+    recall = float((bg & (d_to_pred <= r)).sum()) / max(int(bg.sum()), 1)
     if precision + recall == 0:
         return 0.0
     return float(2 * precision * recall / (precision + recall))

@@ -39,6 +39,10 @@ from cleanplate.session import Prompt                                    # noqa:
 DEMO_SHOT = "walk"
 CHANGED_IOU = 0.99            # below this, a frame counts as changed by a re-run
 NEAR_CLICK_PX = 12            # warn when a new click lands this close to an existing one
+# The "High quality (hair)" path. Set from the Task 4 benchmark: whichever method won
+# on hair-region accuracy. Its measured cost is shown in the UI so the trade is explicit.
+HQ = {"model": "matanyone2", "label": "MatAnyone 2",
+      "why": "won the Task 4 hair-region benchmark; see docs/BENCH.md"}
 VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
 
@@ -385,12 +389,13 @@ def correction_report(st: dict):
     return chart, "\n\n".join(lines)
 
 
-def run_refine(st: dict, warmup, dilate, erode, idx, mode, bgc, bgcol, bgimg,
+def run_refine(st: dict, warmup, dilate, erode, hq, idx, mode, bgc, bgcol, bgimg,
                progress=gr.Progress()):
     need_shot(st)
     if st.get("masks") is None:
         raise gr.Error("Run Track first — refinement needs a binary mask to anchor on.")
-    ok, why = refine.available()
+    model = HQ["model"] if hq else "matanyone"
+    ok, why = refine.available(model)
     if not ok:
         raise gr.Error(why)
 
@@ -400,7 +405,8 @@ def run_refine(st: dict, warmup, dilate, erode, idx, mode, bgc, bgcol, bgimg,
     t0 = time.perf_counter()
     try:
         alphas, stats = refine.refine(st["shot"], st["masks"], warmup=int(warmup),
-                                      dilate=int(dilate), erode=int(erode), progress=cb)
+                                      dilate=int(dilate), erode=int(erode),
+                                      model=model, progress=cb)
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         raise gr.Error(str(e))
     wall = time.perf_counter() - t0
@@ -408,11 +414,13 @@ def run_refine(st: dict, warmup, dilate, erode, idx, mode, bgc, bgcol, bgimg,
     st["alphas"] = alphas
     st["rgba"] = None
     st["refine_stats"] = stats
-    st["timings"] = [t for t in st["timings"] if t["stage"] != "Refine (MatAnyone)"]
-    st["timings"].append({"stage": "Refine (MatAnyone)", "device": stats["device"],
+    stage = f"Refine ({stats['model'].split(' (')[0]})"
+    st["timings"] = [t for t in st["timings"] if not t["stage"].startswith("Refine")]
+    st["timings"].append({"stage": stage, "device": stats["device"],
                           "s_per_frame": stats["seconds_per_frame"], "total_s": wall,
                           "fallback": ", ".join(stats["mps_fallback_ops"])})
-    msg = (f"Refined {len(alphas)} frames in {stats['refine_s']}s "
+    msg = (f"Refined with **{stats['model']}** — {len(alphas)} frames in "
+           f"{stats['refine_s']}s "
            f"({stats['seconds_per_frame']:.3f} s/frame, {stats['fps']} fps) on "
            f"`{stats['device']}`. Soft pixels: "
            f"{100 * stats['soft_pixel_fraction']['mean']:.3f}% of frame "
@@ -624,6 +632,11 @@ def build() -> gr.Blocks:
                             warmup_n = gr.Slider(0, 20, value=10, step=1, label="Warmup")
                             dilate_n = gr.Slider(0, 20, value=10, step=1, label="Dilate")
                             erode_n = gr.Slider(0, 20, value=10, step=1, label="Erode")
+                        hq_cb = gr.Checkbox(
+                            False,
+                            label=f"High quality (hair) — {HQ['label']}",
+                            info=("Slower, better on hair. Cost is measured and shown "
+                                  "in the timings table after a run."))
                         refine_btn = gr.Button("Run Refine (MatAnyone)",
                                                variant="primary", interactive=ok_refine)
                         gr.Markdown("---")
@@ -698,7 +711,7 @@ def build() -> gr.Blocks:
         track_btn.click(run_track, [st, *ctx],
                         [st, viewer_img, status, view_mode, iou_img, corr_md,
                          timings_out]).then(metrics_table, st, metrics_md)
-        refine_btn.click(run_refine, [st, warmup_n, dilate_n, erode_n, *ctx],
+        refine_btn.click(run_refine, [st, warmup_n, dilate_n, erode_n, hq_cb, *ctx],
                          [st, viewer_img, status, view_mode, timings_out]
                          ).then(metrics_table, st, metrics_md)
         rgba_btn.click(run_despill, [st, despill_cb, despill_s, despill_b, *ctx],

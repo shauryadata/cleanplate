@@ -21,7 +21,7 @@ from typing import Callable
 import numpy as np
 
 from .ingest import frame_paths
-from .paths import MATANYONE_CKPT
+from .paths import CHECKPOINTS, MATANYONE_CKPT
 from .track import MPS_FALLBACK_RE, pick_device
 
 ProgressFn = Callable[[float, str], None] | None
@@ -29,22 +29,36 @@ ProgressFn = Callable[[float, str], None] | None
 LICENCE_NOTE = ("MatAnyone - S-Lab License 1.0, NON-COMMERCIAL USE ONLY. "
                 "Not bundled; see THIRD_PARTY.md.")
 
+# Both generations share an architecture and an API: InferenceCore.step() and
+# output_prob_to_mask() are identical, so swapping is a one-line change. Both are
+# S-Lab 1.0, non-commercial, and both are kept out of the repo.
+MODELS = {
+    "matanyone":  {"pkg": "matanyone",  "ckpt": "matanyone.pth",
+                   "label": "MatAnyone v1.0.0 (CVPR 2025)"},
+    "matanyone2": {"pkg": "matanyone2", "ckpt": "matanyone2.pth",
+                   "label": "MatAnyone 2 (CVPR 2026 Highlight)"},
+}
 
-def available() -> tuple[bool, str]:
-    """Can we refine? Returns (ok, human-readable reason if not)."""
-    if not MATANYONE_CKPT.exists():
-        return False, (f"checkpoint missing: {MATANYONE_CKPT.name}. "
-                       "Run ./scripts/download.sh matanyone")
+
+def available(model: str = "matanyone") -> tuple[bool, str]:
+    """Can we refine with this model? Returns (ok, human-readable reason if not)."""
+    spec = MODELS.get(model)
+    if spec is None:
+        return False, f"unknown model {model!r}; have {sorted(MODELS)}"
+    ck = CHECKPOINTS / spec["ckpt"]
+    if not ck.exists():
+        return False, (f"checkpoint missing: {ck.name}. "
+                       f"Run ./scripts/download.sh {model}")
     try:
-        import matanyone  # noqa: F401
+        __import__(spec["pkg"])
     except Exception as e:
-        return False, (f"matanyone not importable ({type(e).__name__}: {e}). "
-                       "Run ./scripts/download.sh matanyone")
+        return False, (f"{spec['pkg']} not importable ({type(e).__name__}: {e}). "
+                       f"Run ./scripts/download.sh {model}")
     return True, ""
 
 
 @contextlib.contextmanager
-def _hydra_for_matanyone():
+def _hydra_for_matanyone(pkg: str = "matanyone"):
     """Let MatAnyone initialise Hydra, then hand it back to SAM 2.
 
     sam2/__init__.py registers its config module at import time; MatAnyone's
@@ -79,17 +93,19 @@ def _condition_mask(mask: np.ndarray, dilate: int, erode: int) -> np.ndarray:
     return m
 
 
-def refine(shot: str, masks: np.ndarray, anchor_frame: int = 0,
+def refine(shot: "str | object", masks: np.ndarray, anchor_frame: int = 0,
            device: str = "auto", warmup: int = 10, dilate: int = 10, erode: int = 10,
-           reanchor: list[int] | None = None,
+           reanchor: list[int] | None = None, model: str = "matanyone",
            progress: ProgressFn = None) -> tuple[np.ndarray, dict]:
     """Refine binary masks into a soft alpha.
 
     Returns (alphas, stats) where alphas is uint8 (N, H, W) in 0..255.
     """
-    ok, why = available()
+    ok, why = available(model)
     if not ok:
         raise FileNotFoundError(why)
+    spec = MODELS[model]
+    ckpt = CHECKPOINTS / spec["ckpt"]
 
     frames = frame_paths(shot)
     if len(frames) != len(masks):
@@ -104,11 +120,23 @@ def refine(shot: str, masks: np.ndarray, anchor_frame: int = 0,
     # time, and encode_image() pushes pixel_mean/pixel_std to THAT global rather than
     # to the model's device. Without this rebind, --device cpu on a Mac with MPS
     # available mixes devices and crashes.
-    import matanyone.model.matanyone as _ma_model
-    if str(_ma_model.device) != str(torch.device(device)):
+    import importlib
+    _ma_model = importlib.import_module(f"{spec['pkg']}.model.{spec['pkg']}")
+    if str(getattr(_ma_model, "device", "")) != str(torch.device(device)):
         _ma_model.device = torch.device(device)
-    from matanyone.inference.inference_core import InferenceCore
-    from matanyone.utils.get_default_model import get_matanyone_model
+    # MatAnyone 2 also binds the device inside its positional encoding module.
+    try:
+        _pe = importlib.import_module(f"{spec['pkg']}.model.transformer.positional_encoding")
+        if hasattr(_pe, "device"):
+            _pe.device = torch.device(device)
+    except Exception:
+        pass
+    InferenceCore = importlib.import_module(
+        f"{spec['pkg']}.inference.inference_core").InferenceCore
+    get_model = importlib.import_module(
+        f"{spec['pkg']}.utils.get_default_model").__dict__.get(
+            "get_matanyone_model") or importlib.import_module(
+            f"{spec['pkg']}.utils.get_default_model").__dict__.get("get_matanyone2_model")
 
     reanchor_set = set(reanchor or [])
     fallback_ops: set[str] = set()
@@ -126,9 +154,9 @@ def refine(shot: str, masks: np.ndarray, anchor_frame: int = 0,
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
 
-        with _hydra_for_matanyone():
-            model = get_matanyone_model(str(MATANYONE_CKPT), device)
-        processor = InferenceCore(model, cfg=model.cfg, device=device)
+        with _hydra_for_matanyone(spec["pkg"]):
+            net = get_model(str(ckpt), device)
+        processor = InferenceCore(net, cfg=net.cfg, device=device)
         t_build = time.perf_counter() - t0
 
         out = np.empty((len(frames),) + masks.shape[1:], dtype=np.uint8)
@@ -174,11 +202,11 @@ def refine(shot: str, masks: np.ndarray, anchor_frame: int = 0,
     soft = ((out > 0) & (out < 255)).reshape(len(out), -1).mean(1)
     stats = {
         "stage": "refine",
-        "shot": shot,
-        "model": "MatAnyone v1.0.0",
+        "shot": str(shot),
+        "model": spec["label"],
         "licence": LICENCE_NOTE,
         "device": device,
-        "checkpoint": MATANYONE_CKPT.name,
+        "checkpoint": ckpt.name,
         "anchor_frame": anchor_frame,
         "reanchor_frames": sorted(reanchor_set),
         "warmup": warmup, "dilate": dilate, "erode": erode,
