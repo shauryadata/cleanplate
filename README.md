@@ -50,6 +50,15 @@ oversight, and it is enforced rather than promised:
   one-time `scripts/download.sh`, which fetches the footage, SAM 2 and the model
   weights.
 
+Checked, not assumed. With the app running and a page loaded, **every one of the 60
+requests the browser made went to `127.0.0.1`** — scripts, styles and the web fonts,
+which Gradio serves locally rather than from a CDN. `lsof` on the server process shows
+a single loopback listener and no outbound sockets:
+
+```
+TCP 127.0.0.1:7860 (LISTEN)
+```
+
 ## Pipeline
 
 ```
