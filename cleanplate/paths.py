@@ -37,9 +37,24 @@ def rel(p: Path | str) -> str:
         return str(p)
 
 
-def list_shots() -> list[str]:
+def is_built(shot: str) -> bool:
+    d = SHOTS / shot / "frames"
+    return d.is_dir() and any(d.glob("*.jpg"))
+
+
+def list_shots(include_unbuilt: bool = True) -> list[str]:
+    """Shots on disk.
+
+    A fresh clone has no frames - they are gitignored - but it does have each shot's
+    shot.json, which records the exact ffmpeg cut. Those count as shots the app can
+    build on demand, so include them by default.
+    """
     if not SHOTS.is_dir():
         return []
-    return sorted(d.name for d in SHOTS.iterdir()
-                  if d.is_dir() and (d / "frames").is_dir()
-                  and any((d / "frames").glob("*.jpg")))
+    out = []
+    for d in sorted(SHOTS.iterdir()):
+        if not d.is_dir() or d.name == "source":
+            continue
+        if is_built(d.name) or (include_unbuilt and (d / "shot.json").exists()):
+            out.append(d.name)
+    return out
