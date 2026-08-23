@@ -1,0 +1,31 @@
+{
+  "tier": "A",
+  "kind": "synthetic composite, alpha exact by construction",
+  "recipe": {
+    "name": "A1_man_wave_mars",
+    "fgr": "datasets/vm240k/VideoMatte240K/test/fgr/0000.mp4",
+    "pha": "datasets/vm240k/VideoMatte240K/test/pha/0000.mp4",
+    "bg": "datasets/backgrounds/mars_clean.jpg",
+    "bg_kind": "image",
+    "start": 40,
+    "bg_start": 0,
+    "frames": 96,
+    "width": 1920,
+    "fg_scale": 0.92,
+    "fg_dx": -0.06,
+    "fg_dy": 0.04,
+    "note": "older man, short hair and beard, waving. Static PD background."
+  },
+  "source_dataset": "VideoMatte240K (BackgroundMattingV2, UW GRAIL) - licensed for commercial and non-commercial use",
+  "background_credits": "see datasets/backgrounds/SOURCES.txt",
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "alpha_soft_pixel_fraction": 0.011926,
+    "alpha_distinct_values": 256,
+    "alpha_coverage_mean": 0.23787
+  }
+}

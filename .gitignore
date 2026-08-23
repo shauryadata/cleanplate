@@ -31,6 +31,20 @@ shots/*/*
 outputs/*
 !outputs/.gitkeep
 
+# Datasets: VideoMatte240K, ToS plates, backgrounds. All re-fetchable via
+# scripts/download.sh; SOURCES.txt records provenance and is committed.
+datasets/*
+!datasets/backgrounds/
+datasets/backgrounds/*
+!datasets/backgrounds/SOURCES.txt
+
+# Truth clips: the pixels are derived, the recipes are not. Recipes are committed so
+# every clip regenerates bit for bit via scripts/build_truth.py.
+truth/*
+!truth/*/
+truth/*/*
+!truth/*/recipe.json
+
 # Media formats, wherever they land
 *.mov
 *.mp4

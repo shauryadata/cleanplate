@@ -1,0 +1,31 @@
+{
+  "tier": "A",
+  "kind": "synthetic composite, alpha exact by construction",
+  "recipe": {
+    "name": "A2_pair_city",
+    "fgr": "datasets/vm240k/VideoMatte240K/test/fgr/0001.mp4",
+    "pha": "datasets/vm240k/VideoMatte240K/test/pha/0001.mp4",
+    "bg": "datasets/backgrounds/tos_city_96s.jpg",
+    "bg_kind": "image",
+    "start": 60,
+    "bg_start": 0,
+    "frames": 96,
+    "width": 1920,
+    "fg_scale": 0.88,
+    "fg_dx": 0.0,
+    "fg_dy": 0.05,
+    "note": "woman and child, loose hair on the child, two subjects. Static bg."
+  },
+  "source_dataset": "VideoMatte240K (BackgroundMattingV2, UW GRAIL) - licensed for commercial and non-commercial use",
+  "background_credits": "see datasets/backgrounds/SOURCES.txt",
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "alpha_soft_pixel_fraction": 0.011249,
+    "alpha_distinct_values": 256,
+    "alpha_coverage_mean": 0.0728
+  }
+}

@@ -94,6 +94,34 @@ license; nothing here is relicensed by inclusion.
 - License: LGPL-2.1+ / GPL-2.0+ depending on build configuration.
 - Invoked as an external binary; not linked into or redistributed with CleanPlate.
 
+## Datasets used for ground truth
+
+### VideoMatte240K — University of Washington GRAIL (Background Matting V2)
+- Source: https://grail.cs.washington.edu/projects/background-matting-v2/#/datasets
+- Paper: Lin et al., *Real-Time High-Resolution Background Matting*, CVPR 2021,
+  arXiv:2012.07810. The BackgroundMattingV2 **code** is MIT.
+- **Dataset terms, quoted from the project page: "All datasets are licensed for
+  commercial and non-commercial purposes. We require you to cite our paper for
+  acedemic works. For use in commercial products, please fill out this survey."**
+  No form is required for non-commercial research use; no payment at any point.
+- Contents used: the 5-clip **test** split of the HEVC package (foreground and alpha
+  as paired mp4s, 3840x2160 / 4096x2304, 30fps). The 479 training clips are left
+  inside the archive unused.
+- Note on provenance: the alpha was extracted by the dataset authors from purchased
+  green-screen stock with After Effects, and is redistributed as HEVC. CleanPlate uses
+  it as *exact* truth regardless, because the decoded alpha is the number used to make
+  the composite — see docs/DECISIONS.md D2.
+- Not committed; `scripts/download.sh datasets` re-fetches it.
+
+### Tears of Steel VFX plates (green screen)
+- Source: https://media.xiph.org/tearsofsteel/tearsofsteel-footage-exr/
+- **License: Creative Commons Attribution 3.0**, per the READMEs in the archive:
+  "These are VFX plates from the mango open movie. (CC) Blender Foundation |
+  mango.blender.org."
+- Used: shot `08_3a`, 96 frames of `linear_hd` (1920x1012 half-float OpenEXR) — the
+  same actor as our `hair` shot, on a green screen, for the Tier B keyed reference.
+- Not committed; `scripts/download.sh datasets` re-fetches it.
+
 ## Footage
 
 ### Tears of Steel

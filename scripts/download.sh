@@ -103,13 +103,53 @@ fetch_matanyone() {
   log "      into ~/.cache/torch/hub/checkpoints/ (torchvision, BSD-3-Clause)."
 }
 
+fetch_datasets() {
+  mkdir -p datasets
+  # VideoMatte240K: foreground + alpha video pairs, 484 clips, 4K/HD.
+  # "licensed for commercial and non-commercial purposes" per the project page.
+  # The download is a TAR despite the .zip name.
+  if [ -d datasets/vm240k/VideoMatte240K/test ]; then
+    log "VideoMatte240K test set already extracted"
+  else
+    log "downloading VideoMatte240K HEVC package (~4.7 GB) from Google Drive"
+    "$PY" -m pip install -q gdown
+    "$PY" -c "import gdown; gdown.download('https://drive.google.com/uc?id=1z-KDuqk1g7-H94iGXDrpZGpexN9jizbQ','datasets/vm240k_hevc.zip',quiet=False,resume=True)"
+    mkdir -p datasets/vm240k
+    tar -xf datasets/vm240k_hevc.zip -C datasets/vm240k ./VideoMatte240K/test
+    log "extracted the 5-clip test set; the 479 train clips stay in the archive"
+  fi
+
+  # Tears of Steel VFX plate 08_3a: green screen, same actor as our `hair` shot.
+  # (CC) Blender Foundation | mango.blender.org, CC BY 3.0.
+  local D=datasets/tos_plates/08_3a
+  mkdir -p "$D"
+  local have; have=$(ls "$D"/*.exr 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$have" -ge 96 ]; then
+    log "ToS plate 08_3a already present ($have frames)"
+  else
+    log "downloading 96 frames of ToS plate 08_3a (~660 MB), CC BY 3.0"
+    local i f
+    for i in $(seq 0 95); do
+      f=$(printf "%05d" "$i")
+      [ -s "$D/$f.exr" ] && continue
+      curl -sfL --retry 2 --max-time 180 -o "$D/$f.exr" \
+        "https://media.xiph.org/tearsofsteel/tearsofsteel-footage-exr/08_3a/linear_hd/08_3a_$f.exr" &
+      (( (i+1) % 6 == 0 )) && wait
+    done
+    wait
+  fi
+  log "now run:  python scripts/build_truth.py --tier all"
+}
+
 case "${1:-all}" in
   footage)     fetch_footage ;;
   sam2)        fetch_sam2 ;;
   checkpoints) fetch_checkpoints ;;
   matanyone)   fetch_matanyone ;;
+  datasets)    fetch_datasets ;;
   all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone ;;
-  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|all]" >&2; exit 2 ;;
+  truth)       fetch_footage; fetch_datasets ;;
+  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|datasets|truth|all]" >&2; exit 2 ;;
 esac
 
 log "done."

@@ -1,0 +1,31 @@
+{
+  "tier": "A",
+  "kind": "synthetic composite, alpha exact by construction",
+  "recipe": {
+    "name": "A3_longhair_canal",
+    "fgr": "datasets/vm240k/VideoMatte240K/test/fgr/0002.mp4",
+    "pha": "datasets/vm240k/VideoMatte240K/test/pha/0002.mp4",
+    "bg": "datasets/backgrounds/tos_canal_move.mp4",
+    "bg_kind": "video",
+    "start": 30,
+    "bg_start": 0,
+    "frames": 96,
+    "width": 1920,
+    "fg_scale": 0.95,
+    "fg_dx": 0.0,
+    "fg_dy": 0.02,
+    "note": "THE HAIR CASE: long loose dark hair, front on. Moving background."
+  },
+  "source_dataset": "VideoMatte240K (BackgroundMattingV2, UW GRAIL) - licensed for commercial and non-commercial use",
+  "background_credits": "see datasets/backgrounds/SOURCES.txt",
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "alpha_soft_pixel_fraction": 0.007063,
+    "alpha_distinct_values": 256,
+    "alpha_coverage_mean": 0.24251
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "tier": "B",
+  "kind": "keyed reference, NOT gospel",
+  "note": "Tears of Steel plate 08_3a, (CC) Blender Foundation | mango.blender.org. Same actor as our `hair` shot, long backlit grey hair, real green screen. The reference alpha is produced by the simple keyer in cleanplate.truth, so it carries that keyer's errors and must not be treated as exact.",
+  "plates": "datasets/tos_plates/08_3a",
+  "background": "datasets/backgrounds/tos_ruins_580s.jpg",
+  "gamma": 2.2,
+  "width": 1920,
+  "key_params": {
+    "key_hue": 120.0,
+    "hue_tol": 44.0,
+    "sat_min": 0.16,
+    "val_min": 0.05,
+    "alpha_lo": 0.08,
+    "alpha_hi": 0.38,
+    "garbage": [
+      0,
+      0,
+      1240,
+      1012
+    ],
+    "despill": true,
+    "median": 3,
+    "keep_largest": true,
+    "keep_dilate": 9,
+    "note": "Thresholds are set from the measured greenness distribution on frame 48, not guessed: subject p99 = 0.051, backing p1 = 0.417, so alpha_lo sits just above the subject and alpha_hi just below the backing. The garbage box drops the grey flag at frame right, which is not green and would otherwise key in as foreground. KEYED REFERENCE, NOT GOSPEL."
+  },
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "alpha_soft_pixel_fraction": 0.004276,
+    "alpha_distinct_values": 256,
+    "alpha_coverage_mean": 0.23371
+  }
+}

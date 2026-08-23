@@ -70,3 +70,54 @@ matting stage, taking SAM 2's binary mask as the first-frame anchor and producin
 - **SAM2 → trimap → ViTMatte + temporal smoothing** — three components to tune instead of
   one, per-frame by construction, and the trimap band width becomes a hand-tuned parameter
   per shot. Kept on the shelf as the permissively-licensed fallback.
+
+---
+
+## D2 — Ground truth: two tiers, both free (Task 4, 2026-08-23)
+
+### Checkpoint 0 finding: Tears of Steel ships its VFX plates, and many are green screen
+
+**The open production archive is real, complete, and free.** `media.xiph.org/tearsofsteel/`
+carries the full Mango VFX pipeline output, all under **Creative Commons Attribution 3.0**
+per the READMEs in each tree ("These are VFX plates from the mango open movie", "(CC)
+Blender Foundation | mango.blender.org"). Nothing is paywalled and nothing needs an
+account. What exists:
+
+| Tree | Contents | Access |
+|---|---|---|
+| `raw/` | 2 shots as Sony F65 4K raw `.mxf` — 21 GB and 13 GB | free, huge |
+| `linear-exr/` | 2 shots, 4K linear OpenEXR decoded from the raw | free |
+| `tearsofsteel-footage-exr/` | **81 shots** of VFX plates, each with `linear/` (4K, ~51 MB/frame) and `linear_hd/` (1920x1012, ~6.2 MB/frame) | free |
+| `tearsofsteel-cleaned-exr/` | 76 shots, plates with rig/marker cleanup | free |
+| `tearsofsteel-frames-exr/` | 148 shots of final frames | free |
+| `tearsofsteel-1080-png/`, `-4k-tiff/` | final graded frames, via torrent | free |
+
+Blender Studio's subscription library was **not needed** and was not used — everything
+above is on the open Xiph mirror. No paywall was encountered, so the $0 rule was never
+tested.
+
+**Surveying all 81 plate shots** (one frame each, `outputs/_scout/tos_plates_survey.jpg`)
+found roughly 25 green-screen setups. Critically, **`08_3a` is the same actor as our
+`hair` shot — long grey backlit hair — standing against a clean green screen**, 847
+frames at 1920x1012. That is the hardest case in the project with keyable reference
+alpha available.
+
+Plates for our three graded shots also exist: `01_2a` is the bridge two-shot (`dialogue`),
+`04_2d`/`04_3e` the warm interior (`hair`), `05_1c`/`05_3*` the canal walk (`walk`). Those
+are ungraded source, not alpha, so they give resolution but not truth.
+
+### Decision
+
+Build **two truth tiers**, and never conflate them:
+
+- **Tier A — synthetic, exact.** VideoMatte240K foreground+alpha clips composited over
+  known backgrounds by a seeded script. The alpha is ground truth *by construction*:
+  it is the input to the composite. Used to validate the metrics and to give an
+  unarguable accuracy number.
+- **Tier B — keyed reference, not gospel.** A scripted chroma key on ToS `08_3a`. This
+  is real footage with real hair, at 1920 width, of the same actor as our hair shot — but
+  the reference alpha is produced by a keyer, so it carries the keyer's own errors. Every
+  table that uses it is labelled accordingly.
+
+Tier B is the more *relevant* hair test; Tier A is the more *trustworthy* number. Reporting
+both, separately, is the point.
