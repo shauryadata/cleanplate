@@ -7,8 +7,9 @@ Apple Silicon (MPS), CUDA, or CPU.
 
 ## Status
 
-**Task 3 — the app: done.** The CLI pipeline is now a local web app. One command, load
-a clip, click the subject, get a matte, correct it, export.
+**Task 5 — removal: done.** Click a thing, it goes away, the background fills in. Plus a
+diagnosis of the two bugs the first real user hit. The app runs locally with one
+command:
 
 ```bash
 python app.py
@@ -18,16 +19,21 @@ python app.py
 
 | | |
 |---|---|
-| Device | Apple M3 Pro, MPS — **zero fallback ops in either model stage** |
+| Device | Apple M3 Pro, 18 GB, MPS — **zero fallback ops in any model stage** |
 | Track (SAM 2.1 hiera-small) | ~0.82 s/frame (1.2 fps) |
 | Refine (MatAnyone) | ~0.13 s/frame (7.9 fps) |
 | RGBA + despill | ~0.007 s/frame |
-| Whole 96-frame shot, in the app | about 95 s |
+| Remove (ProPainter, fp16) | ~2.2 s/frame — 10x matting, and the memory ceiling |
+| Whole 96-frame shot, matte only | about 95 s |
 
-Earlier tasks: [Task 1](docs/TASK1_REPORT.md) (one-click matte),
-[Task 2](docs/TASK2_REPORT.md) (soft alpha, metrics), [Task 3](docs/TASK3_REPORT.md)
-(this app). Decisions in [DECISIONS.md](docs/DECISIONS.md), numbers in
-[METRICS.md](docs/METRICS.md).
+Reports: [Task 1](docs/TASK1_REPORT.md) (one-click matte),
+[Task 2](docs/TASK2_REPORT.md) (soft alpha, metrics),
+[Task 3](docs/TASK3_REPORT.md) (the app),
+[Task 4](docs/TASK4_REPORT.md) (ground truth, then hair),
+[Task 5](docs/TASK5_REPORT.md) (the user's bug, then removal).
+Decisions in [DECISIONS.md](docs/DECISIONS.md), accuracy in [BENCH.md](docs/BENCH.md),
+removal in [REMOVAL_BENCH.md](docs/REMOVAL_BENCH.md), and the things that are
+still wrong in [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 RotoBench — a public benchmark of AI matte quality — comes in a later phase.
 
@@ -87,6 +93,39 @@ against the previous run frame by frame and, crucially, flags frames that change
 timestep, so a corrective click silently redefines the object for the whole shot — this
 is what that looks like when it goes wrong, and the app says so instead of leaving you
 to find it.
+
+## Removing things
+
+![Removing one actor of two](docs/img/removal.gif)
+
+Click a thing and it goes away, and the background behind it comes back. Same matte the
+rest of the tool produces, dilated into a hole, filled by
+[ProPainter](https://github.com/sczhou/ProPainter). One actor here, the other left
+alone.
+
+```
+matte ─► make_hole ─► ProPainter ─► cleaned plate
+        (dilate 12px)  (fp16,       (PNG sequence
+                        chunks of 8) or mp4)
+```
+
+The hole is deliberately grown past the matte. A pixel-tight matte leaves a rim of the
+subject's own colour behind, and the inpainter will happily propagate that rim into the
+fill.
+
+**What it costs.** About 2.2 s/frame at 960px on an M3 Pro — roughly ten times matting,
+and the stage most likely to run a machine out of memory. Every heavy stage runs under a
+memory guard that kills the job rather than thrash; the defaults (fp16, chunks of 8)
+were measured, not guessed, because ProPainter's own defaults grew swap by 6 GB on
+twenty-four frames.
+
+**When it works and when it does not.** A camera move is removal's friend, not its
+enemy: panning past an object is parallax, and parallax reveals what is actually behind
+it. An object that holds still relative to the camera never reveals its background, so
+the fill is invention rather than recovery — that is the smudge you will see behind a
+static subject. Moving water and foliage come back too calm, at about a third of their
+true motion. Numbers, three worked examples and the full failure list are in
+[docs/REMOVAL_BENCH.md](docs/REMOVAL_BENCH.md).
 
 ## Quickstart
 

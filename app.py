@@ -32,8 +32,9 @@ import gradio as gr
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cleanplate import __version__, compose, ingest, metrics, paths, refine, runs, \
-    track, viewer                                                       # noqa: E402
+from cleanplate import __version__, compose, ingest, metrics, paths, refine, remove, \
+    runs, track, viewer                                                 # noqa: E402
+from cleanplate.memguard import MemoryAbort                             # noqa: E402
 from cleanplate.session import Prompt                                    # noqa: E402
 
 DEMO_SHOT = "walk"
@@ -50,7 +51,8 @@ HQ = {"label": "hair crop-and-zoom (2x) + MatAnyone 2",
               "-10.6% on the one clip with reference alpha for a real backlit head",
       "cost": "about +0.07 s/frame at 960 on the hair shot; 0.56 vs 0.20 s/frame "
               "averaged over the Task 4 truth clips"}
-VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp"]
+VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp",
+              "Removal hole", "Cleaned plate"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
 
 CSS = """
@@ -98,7 +100,8 @@ def blank_state() -> dict:
     return {"shot": None, "prompt": Prompt(), "masks": None, "alphas": None,
             "prev_masks": None, "ran_prompt_frames": [], "track_stats": None,
             "refine_stats": None, "rgba": None, "comp": None, "timings": [],
-            "last_iou": None, "correction_frame": None, "despilled": 0}
+            "last_iou": None, "correction_frame": None, "despilled": 0,
+            "cleaned": None, "holes": None, "remove_stats": None}
 
 
 def active_alpha(st: dict) -> np.ndarray | None:
@@ -134,6 +137,16 @@ def render(st: dict, idx: int, mode: str, bg_choice: str, bg_colour: str,
     elif mode == "RGBA on checkerboard":
         src = st["rgba"][idx][..., :3] if st.get("rgba") is not None else rgb
         out = viewer.checker_view(src, a)
+    elif mode == "Removal hole":
+        if st.get("holes") is None:
+            h = remove.make_hole(alpha[idx:idx + 1], dilate=12)[0]
+        else:
+            h = st["holes"][idx]
+        out = np.clip(rgb.astype(np.float32) * (1 - (h[..., None] / 255.0) * 0.75)
+                      + np.array([255, 60, 60]) * (h[..., None] / 255.0) * 0.75,
+                      0, 255).astype(np.uint8)
+    elif mode == "Cleaned plate":
+        out = st["cleaned"][idx] if st.get("cleaned") is not None else rgb
     elif mode == "Comp":
         src = st["rgba"][idx][..., :3] if st.get("rgba") is not None else rgb
         out = compose.over(src, a, background_plate(st, bg_choice, bg_colour, bg_image))
@@ -479,6 +492,48 @@ def run_despill(st: dict, do_despill, strength, band, idx, mode, bgc, bgcol, bgi
             gr.update(value="RGBA on checkerboard"), timings_md(st))
 
 
+def run_remove(st: dict, dilate, chunk, fp16, idx, mode, bgc, bgcol, bgimg,
+               progress=gr.Progress()):
+    need_shot(st)
+    alpha = active_alpha(st)
+    if alpha is None:
+        raise gr.Error("Track the thing you want removed first, on the Prompt tab.")
+    ok, why = remove.available()
+    if not ok:
+        raise gr.Error(why)
+
+    def cb(frac: float, msg: str) -> None:
+        progress(min(max(frac, 0.0), 1.0), desc=msg)
+
+    from cleanplate.ingest import resolve_frames_dir
+    try:
+        res = remove.remove(resolve_frames_dir(st["shot"]), alpha, dilate=int(dilate),
+                            subvideo_length=int(chunk), fp16=bool(fp16), progress=cb)
+    except MemoryAbort as e:
+        raise gr.Error(f"Stopped to protect your machine. {e}")
+    except (FileNotFoundError, RuntimeError, ValueError) as e:
+        raise gr.Error(f"{type(e).__name__}: {e}")
+
+    st["cleaned"] = res.frames
+    st["holes"] = res.holes
+    st["remove_stats"] = res.stats
+    m = res.stats["memory"]
+    st["timings"] = [t for t in st["timings"] if not t["stage"].startswith("Remove")]
+    st["timings"].append({"stage": "Remove (ProPainter)", "device": "mps",
+                          "s_per_frame": res.stats["seconds_per_frame"],
+                          "total_s": res.stats["total_s"], "fallback": ""})
+    msg = (f"Removed and filled {res.stats['frames']} frames in "
+           f"{res.stats['total_s']:.0f}s (**{res.stats['seconds_per_frame']:.2f} "
+           f"s/frame**). Hole covered "
+           f"{100 * res.stats['hole_area_fraction_mean']:.1f}% of frame.\n\n"
+           f"<div class='cp-ok'>Memory: lowest available "
+           f"{m['lowest_available_mb']:.0f} MB, swap "
+           f"{m['swap_start_mb']:.0f} → {m['swap_peak_mb']:.0f} MB. Peak RSS understates "
+           f"pressure, so those are the numbers that matter.</div>")
+    return (st, render(st, idx, "Cleaned plate", bgc, bgcol, bgimg), msg,
+            gr.update(value="Cleaned plate"), timings_md(st))
+
+
 def metrics_table(st: dict) -> str:
     if st.get("masks") is None:
         return "<div class='cp-hint'>Run Track to get numbers.</div>"
@@ -517,6 +572,20 @@ def export_bundle(st: dict, what: str, fps: float, bgc, bgcol, bgimg,
         d = stage / "rgba"
         compose.write_sequence(list(st["rgba"]), d, mode="RGBA")
         out = runs.zip_dir(d, _staging() / f"{stamp}_rgba.zip", f"{st['shot']}_rgba")
+    elif what == "Cleaned plate PNG sequence (zip)":
+        if st.get("cleaned") is None:
+            raise gr.Error("Run Remove first — there is no cleaned plate yet.")
+        progress(0.3, desc="writing the cleaned plate")
+        d = stage / "cleaned"
+        compose.write_sequence(list(st["cleaned"]), d, mode="RGB")
+        out = runs.zip_dir(d, _staging() / f"{stamp}_cleaned.zip", f"{st['shot']}_cleaned")
+    elif what == "cleaned_plate.mp4":
+        if st.get("cleaned") is None:
+            raise gr.Error("Run Remove first — there is no cleaned plate yet.")
+        d = stage / "cleanvid"
+        compose.write_sequence(list(st["cleaned"]), d, mode="RGB")
+        progress(0.9, desc="encoding with ffmpeg")
+        out = compose.encode(d, _staging() / f"{stamp}_cleaned_plate.mp4", float(fps))
     elif what == "metrics.json":
         payload = {"shot": st["shot"],
                    "track": st.get("track_stats"), "refine": st.get("refine_stats"),
@@ -678,6 +747,37 @@ def build() -> gr.Blocks:
                         bg_image = gr.Image(label="Background plate", type="pil",
                                             height=170, buttons=["fullscreen"])
 
+                    with gr.Tab("Remove"):
+                        ok_rm, why_rm = remove.available()
+                        gr.Markdown(
+                            "### Click a thing, make it vanish\n"
+                            "<div class='cp-hint'>Remove mode uses <b>the same clicks, "
+                            "with the opposite intent</b>: whatever you tracked on the "
+                            "Prompt tab is what gets deleted, and the background is "
+                            "filled in behind it. Track first, then come here.</div>"
+                            if ok_rm else
+                            f"<div class='cp-warn'>Removal unavailable — {why_rm}</div>")
+                        with gr.Row():
+                            hole_dilate = gr.Slider(0, 40, value=12, step=1,
+                                                    label="Grow the hole (px)",
+                                                    info="A pixel-tight hole leaves a "
+                                                         "rim of the subject behind for "
+                                                         "the fill to smear.")
+                            rm_chunk = gr.Slider(4, 40, value=8, step=2,
+                                                 label="Frames per chunk",
+                                                 info="Main memory control. 8 measured "
+                                                      "safe at 960px on 18 GB.")
+                        rm_fp16 = gr.Checkbox(True, label="fp16 (halves memory)")
+                        gr.Markdown(
+                            "<div class='cp-warn'><b>This is the slow stage.</b> "
+                            "Measured on this machine: about <b>2.2 s/frame</b> at 960px "
+                            "— roughly 3.5 minutes for a 96-frame shot. It runs "
+                            "ProPainter in a child process with a memory guard that "
+                            "kills it rather than let the machine thrash.</div>")
+                        remove_btn = gr.Button("Remove and fill", variant="primary",
+                                               interactive=ok_rm)
+                        rm_status = gr.Markdown("")
+
                     with gr.Tab("Changes"):
                         gr.Markdown("### What did your last re-run change?")
                         iou_img = gr.Image(label="Per-frame IoU vs previous run",
@@ -689,6 +789,7 @@ def build() -> gr.Blocks:
                     with gr.Tab("Export"):
                         export_what = gr.Dropdown(
                             ["Matte PNG sequence (zip)", "RGBA PNG sequence (zip)",
+                             "Cleaned plate PNG sequence (zip)", "cleaned_plate.mp4",
                              "comp.mp4", "matte.mp4", "side_by_side.mp4",
                              "metrics.json"],
                             value="Matte PNG sequence (zip)", label="Export")
@@ -735,6 +836,8 @@ def build() -> gr.Blocks:
         refine_btn.click(run_refine, [st, warmup_n, dilate_n, erode_n, hq_cb, *ctx],
                          [st, viewer_img, status, view_mode, timings_out]
                          ).then(metrics_table, st, metrics_md)
+        remove_btn.click(run_remove, [st, hole_dilate, rm_chunk, rm_fp16, *ctx],
+                         [st, viewer_img, rm_status, view_mode, timings_out])
         rgba_btn.click(run_despill, [st, despill_cb, despill_s, despill_b, *ctx],
                        [st, viewer_img, status, view_mode, timings_out])
 
