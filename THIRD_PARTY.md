@@ -39,6 +39,33 @@ license; nothing here is relicensed by inclusion.
   > Yang et al., *MatAnyone: Stable Video Matting with Consistent Memory Propagation*,
   > CVPR 2025, arXiv:2501.14677.
 
+### MatAnyone 2 — Nanyang Technological University, S-Lab
+- Source: https://github.com/pq-yang/MatAnyone2
+- Paper: *MatAnyone 2: Scaling Video Matting via a Learned Quality Evaluator*,
+  CVPR 2026 Highlight, arXiv:2512.11782.
+- **License: S-Lab License 1.0 — NON-COMMERCIAL USE ONLY**, verified from `LICENSE.txt`
+  at the repository root ("Redistribution and use for non-commercial purpose..."),
+  identical terms to MatAnyone v1. GitHub reports `NOASSERTION` because it is a custom
+  licence.
+- Handled exactly like v1: cloned into gitignored `vendor/matanyone2/`, driven through
+  `cleanplate/refine.py`, never bundled, and CleanPlate runs without it.
+- Weights: `matanyone2.pth` (135 MB), GitHub release v1.0.0, same terms. Not committed.
+- Why it is here: it won the Task 4 whole-frame benchmark at essentially baseline cost.
+  See docs/BENCH.md and docs/DECISIONS.md D3.
+
+### ViTMatte — hustvl, via Hugging Face Transformers
+- Model: `hustvl/vitmatte-small-composition-1k`
+- **License: Apache-2.0** (per the Hugging Face model card metadata). This is the only
+  matting model in the project that is *not* research-only, which is why the
+  trimap→ViTMatte route stays documented as the commercially usable fallback.
+- Paper: Yao et al., *ViTMatte: Boosting Image Matting with Pretrained Plain Vision
+  Transformers*.
+- Downloaded on demand by `transformers` into the Hugging Face cache; not committed.
+
+### Hugging Face Transformers
+- Source: https://github.com/huggingface/transformers
+- License: Apache-2.0. Used only to run ViTMatte.
+
 ### torchvision ImageNet backbone weights (ResNet-50, ResNet-18)
 - Downloaded automatically by MatAnyone on first run to `~/.cache/torch/hub/checkpoints/`
   (`resnet50-19c8e357.pth`, `resnet18-5c106cde.pth`; ~143 MB combined).

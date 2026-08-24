@@ -41,8 +41,13 @@ CHANGED_IOU = 0.99            # below this, a frame counts as changed by a re-ru
 NEAR_CLICK_PX = 12            # warn when a new click lands this close to an existing one
 # The "High quality (hair)" path. Set from the Task 4 benchmark: whichever method won
 # on hair-region accuracy. Its measured cost is shown in the UI so the trade is explicit.
-HQ = {"model": "matanyone2", "label": "MatAnyone 2",
-      "why": "won the Task 4 hair-region benchmark; see docs/BENCH.md"}
+# Set from the Task 4 benchmark. Default refine is MatAnyone 2: it beat v1 on every
+# whole-frame metric at essentially the same cost. High quality adds the crop-and-zoom
+# pass over the head, which won the hair region outright.
+DEFAULT_REFINE = "matanyone2"
+HQ = {"label": "hair crop-and-zoom (2x) + MatAnyone 2",
+      "gain": "hair-region MAD 10.14 -> 6.33 (-37.6%) on the Task 4 truth set",
+      "cost": "about 0.56 s/frame against 0.20 s/frame, measured on 6 clips"}
 VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
 
@@ -394,7 +399,7 @@ def run_refine(st: dict, warmup, dilate, erode, hq, idx, mode, bgc, bgcol, bgimg
     need_shot(st)
     if st.get("masks") is None:
         raise gr.Error("Run Track first — refinement needs a binary mask to anchor on.")
-    model = HQ["model"] if hq else "matanyone"
+    model = DEFAULT_REFINE
     ok, why = refine.available(model)
     if not ok:
         raise gr.Error(why)
@@ -411,6 +416,19 @@ def run_refine(st: dict, warmup, dilate, erode, hq, idx, mode, bgc, bgcol, bgimg
         raise gr.Error(str(e))
     wall = time.perf_counter() - t0
 
+    if hq:
+        progress(0.0, desc="high quality: re-matting the head at 2x")
+        from cleanplate import methods as _m
+        from cleanplate.ingest import resolve_frames_dir
+        try:
+            alphas, zstats = _m.refine_hair_zoom(
+                resolve_frames_dir(st["shot"]), alphas, model=model, progress=cb)
+        except Exception as e:
+            raise gr.Error(f"High-quality pass failed: {type(e).__name__}: {e}")
+        stats["hair_zoom"] = zstats
+        st["timings"].append({"stage": "Hair zoom (2x)", "device": stats["device"],
+                              "s_per_frame": zstats["hairzoom_s_per_frame"],
+                              "total_s": zstats["hairzoom_total_s"], "fallback": ""})
     st["alphas"] = alphas
     st["rgba"] = None
     st["refine_stats"] = stats
@@ -634,9 +652,10 @@ def build() -> gr.Blocks:
                             erode_n = gr.Slider(0, 20, value=10, step=1, label="Erode")
                         hq_cb = gr.Checkbox(
                             False,
-                            label=f"High quality (hair) — {HQ['label']}",
-                            info=("Slower, better on hair. Cost is measured and shown "
-                                  "in the timings table after a run."))
+                            label="High quality (hair)",
+                            info=(f"{HQ['label']}. {HQ['gain']}. Costs {HQ['cost']} — "
+                                  "the real figure lands in the timings table after a "
+                                  "run."))
                         refine_btn = gr.Button("Run Refine (MatAnyone)",
                                                variant="primary", interactive=ok_refine)
                         gr.Markdown("---")

@@ -149,6 +149,56 @@ def _hair_box_from_alpha(alpha: np.ndarray, top_fraction: float = 0.30,
             min(W, int(xs2.max()) + pad), min(H, cut + pad))
 
 
+def refine_hair_zoom(frames_dir: Path, alpha: np.ndarray, zoom: float = 2.0,
+                     device: str = "auto", feather: int = 12,
+                     model: str = "matanyone2",
+                     progress=None) -> tuple[np.ndarray, dict]:
+    """Re-run the matting stage on a magnified crop of the head, feathered back in.
+
+    This is the Task 4 winner (`hairzoom2_960`): hair-region MAD 6.33 against the
+    baseline's 10.14, a 37.6% reduction, at 0.557 s/frame. Takes an existing alpha so
+    the app can apply it without re-tracking.
+    """
+    import cv2
+    H, W = alpha.shape[1:]
+    box = _hair_box_from_alpha(alpha)
+    l, t, r, b = box
+    cw, ch = r - l, b - t
+    ps = sorted(Path(frames_dir).glob("*.jpg"), key=lambda q: int(q.stem))
+
+    tw = int(round(cw * zoom)); tw -= tw % 2
+    th = int(round(ch * zoom)); th -= th % 2
+    tag = hashlib.sha1(f"{frames_dir}|zoom|{box}|{zoom}".encode()).hexdigest()[:10]
+    cdir = WORK / f"hairzoom_{tag}"
+    if cdir.exists():
+        shutil.rmtree(cdir)
+    cdir.mkdir(parents=True)
+    for i, p in enumerate(ps):
+        im = np.asarray(Image.open(p).convert("RGB"))[t:b, l:r]
+        Image.fromarray(cv2.resize(im, (tw, th), interpolation=cv2.INTER_CUBIC)).save(
+            cdir / f"{i:05d}.jpg", quality=96)
+
+    seed = cv2.resize(alpha[0][t:b, l:r], (tw, th), interpolation=cv2.INTER_LINEAR)
+    seed_mask = np.stack([(seed > 127)] * len(ps))
+    t0 = time.perf_counter()
+    zoomed, rstats = _refine.refine(cdir, seed_mask, device=device, model=model,
+                                    progress=progress)
+    yy, xx = np.mgrid[0:ch, 0:cw].astype(np.float32)
+    f = max(1, feather)
+    w = np.clip(np.minimum.reduce([xx, cw - 1 - xx, yy, ch - 1 - yy]) / f, 0, 1)
+    out = alpha.copy()
+    for i in range(len(out)):
+        back = cv2.resize(zoomed[i], (cw, ch), interpolation=cv2.INTER_AREA)
+        cur = out[i, t:b, l:r].astype(np.float32)
+        out[i, t:b, l:r] = np.clip(cur * (1 - w) + back.astype(np.float32) * w,
+                                   0, 255).astype(np.uint8)
+    return out, {"hair_box": list(box), "zoom": zoom,
+                 "hairzoom_model": rstats["model"],
+                 "hairzoom_s_per_frame": rstats["seconds_per_frame"],
+                 "hairzoom_total_s": round(time.perf_counter() - t0, 2),
+                 "peak_rss_after_hairzoom_mb": round(peak_rss_mb(), 1)}
+
+
 def hair_zoom(clip, prompt: Prompt, base_width: int = 960, zoom: float = 2.0,
               device: str = "auto", feather: int = 12,
               model: str = "matanyone") -> tuple[np.ndarray, dict]:
@@ -159,136 +209,11 @@ def hair_zoom(clip, prompt: Prompt, base_width: int = 960, zoom: float = 2.0,
     just the head gives the same model far more pixels per strand. The crop result is
     feathered back in so the seam does not show.
     """
-    import cv2
     alpha, stats = sam2_matanyone(clip, prompt, width=base_width, device=device,
                                   model=model)
-    H, W = alpha.shape[1:]
-    box = _hair_box_from_alpha(alpha)
-    l, t, r, b = box
-    cw, ch = r - l, b - t
-
-    # crop the plate around the head, magnified
-    ps = frame_paths(clip.frames_dir)
-    tw = int(round(cw * zoom)); tw -= tw % 2
-    th = int(round(ch * zoom)); th -= th % 2
-    tag = hashlib.sha1(f"{clip.frames_dir}|zoom|{box}|{zoom}".encode()).hexdigest()[:10]
-    cdir = WORK / f"hairzoom_{tag}"
-    if cdir.exists():
-        shutil.rmtree(cdir)
-    cdir.mkdir(parents=True)
-    for i, p in enumerate(ps):
-        im = np.asarray(Image.open(p).convert("RGB"))[t:b, l:r]
-        Image.fromarray(cv2.resize(im, (tw, th), interpolation=cv2.INTER_CUBIC)).save(
-            cdir / f"{i:05d}.jpg", quality=96)
-
-    # seed the crop with the baseline alpha, so no new click is needed
-    seed = cv2.resize(alpha[0][t:b, l:r], (tw, th), interpolation=cv2.INTER_LINEAR)
-    seed_mask = np.stack([(seed > 127)] + [(seed > 127)] * (len(ps) - 1))
-    t0 = time.perf_counter()
-    zoomed, rstats = _refine.refine(cdir, seed_mask, device=device, model=model,
-                                    progress=None)
-    stats.update({"hair_box": list(box), "zoom": zoom,
-                  "hairzoom_s_per_frame": rstats["seconds_per_frame"],
-                  "hairzoom_total_s": round(time.perf_counter() - t0, 2),
-                  "peak_rss_after_hairzoom_mb": round(peak_rss_mb(), 1)})
-
-    # feather the crop back in
-    yy, xx = np.mgrid[0:ch, 0:cw].astype(np.float32)
-    f = max(1, feather)
-    w = np.minimum.reduce([xx, cw - 1 - xx, yy, ch - 1 - yy]) / f
-    w = np.clip(w, 0, 1)[None]
-    out = alpha.copy()
-    for i in range(len(out)):
-        back = cv2.resize(zoomed[i], (cw, ch), interpolation=cv2.INTER_AREA)
-        cur = out[i, t:b, l:r].astype(np.float32)
-        out[i, t:b, l:r] = np.clip(cur * (1 - w[0]) + back.astype(np.float32) * w[0],
-                                   0, 255).astype(np.uint8)
-    return out, stats
-
-
-def fullres_matte(clip, prompt: Prompt, track_width: int = 960, device: str = "auto",
-                  model: str = "matanyone") -> tuple[np.ndarray, dict]:
-    """Track at 960, then run the MATTING stage at full resolution.
-
-    `fullres_1920` - running both stages at 1920 - turned out to answer the wrong
-    question. SAM 2's multi-mask head chooses a different granularity at a different
-    input resolution: on A3 the same relative click selected the woman's SKIN (face,
-    neck, chest) at 1920 where it selected the whole person at 960. The matting stage
-    was then handed a mask of the wrong object, and the clip scored MAD 149.
-
-    So the resolution hypothesis has to be tested with the segmentation held constant:
-    same 960 SAM 2 mask, upscaled, matted at full res. This isolates "does the matting
-    stage benefit from more pixels" from "does SAM 2 behave differently at 1920".
-    """
-    import cv2
-    ps = frame_paths(clip.frames_dir)
-    with Image.open(ps[0]) as im:
-        W, H = im.size
-
-    fdir, sc = _scaled_frames(Path(clip.frames_dir), track_width)
-    p = _scale_prompt(prompt, sc)
-    t0 = time.perf_counter()
-    masks, tstats = _cached_track(fdir, p, device)
-    t_track = time.perf_counter() - t0
-
-    big = np.stack([cv2.resize(m.astype(np.uint8) * 255, (W, H),
-                               interpolation=cv2.INTER_NEAREST) > 127 for m in masks])
-    t1 = time.perf_counter()
-    alpha, rstats = _refine.refine(Path(clip.frames_dir), big, device=device,
-                                   model=model, progress=None)
-    return alpha, {"track_width": track_width, "matte_width": W,
-                   "track_cached": bool(tstats.get("cached")),
-                   "track_s_per_frame": tstats["seconds_per_frame"],
-                   "track_total_s": round(t_track, 2),
-                   "refine_model": rstats["model"],
-                   "refine_s_per_frame": rstats["seconds_per_frame"],
-                   "refine_total_s": round(time.perf_counter() - t1, 2),
-                   "refine_fallback_ops": rstats["mps_fallback_ops"],
-                   "peak_rss_mb": round(peak_rss_mb(), 1)}
-
-
-# --------------------------------------------------------------- 5c: guided filter
-def guided_filter(guide_gray: np.ndarray, src: np.ndarray, radius: int = 8,
-                  eps: float = 1e-4) -> np.ndarray:
-    """He et al. guided filter, single channel. Both inputs float32 in [0, 1].
-
-    Implemented here rather than pulled from opencv-contrib: it is a dozen box filters
-    and adding a whole extra OpenCV build for it is not worth it.
-    """
-    import cv2
-    k = (2 * radius + 1, 2 * radius + 1)
-    mean_i = cv2.blur(guide_gray, k)
-    mean_p = cv2.blur(src, k)
-    corr_i = cv2.blur(guide_gray * guide_gray, k)
-    corr_ip = cv2.blur(guide_gray * src, k)
-    var_i = corr_i - mean_i * mean_i
-    cov_ip = corr_ip - mean_i * mean_p
-    a = cov_ip / (var_i + eps)
-    b = mean_p - a * mean_i
-    return cv2.blur(a, k) * guide_gray + cv2.blur(b, k)
-
-
-def guided(clip, prompt: Prompt, base_width: int = 960, radius: int = 8,
-           eps: float = 1e-4, device: str = "auto",
-           model: str = "matanyone") -> tuple[np.ndarray, dict]:
-    """Baseline, then pull the alpha towards the plate's own edges with a guided filter.
-
-    The cheap hypothesis: the plate already knows where the hair is; a guided filter
-    transfers that structure onto the alpha for almost no compute.
-    """
-    import cv2
-    alpha, stats = sam2_matanyone(clip, prompt, width=base_width, device=device,
-                                  model=model)
-    ps = frame_paths(clip.frames_dir)
-    t0 = time.perf_counter()
-    out = np.empty_like(alpha)
-    for i, p in enumerate(ps):
-        g = np.asarray(Image.open(p).convert("L"), dtype=np.float32) / 255.0
-        a = alpha[i].astype(np.float32) / 255.0
-        out[i] = np.clip(guided_filter(g, a, radius, eps) * 255.0, 0, 255).astype(np.uint8)
-    stats.update({"guided_radius": radius, "guided_eps": eps,
-                  "guided_total_s": round(time.perf_counter() - t0, 2),
-                  "guided_s_per_frame": round((time.perf_counter() - t0) / len(ps), 4)})
+    out, zstats = refine_hair_zoom(Path(clip.frames_dir), alpha, zoom=zoom,
+                                   device=device, feather=feather, model=model)
+    stats.update(zstats)
     return out, stats
 
 
@@ -403,6 +328,8 @@ def make(name: str):
         "fullmatte2_1920": lambda c, p: fullres_matte(c, p, track_width=960,
                                                       model="matanyone2"),
         "hairzoom_960":  lambda c, p: hair_zoom(c, p, base_width=960, zoom=2.0),
+        "hairzoom2_960": lambda c, p: hair_zoom(c, p, base_width=960, zoom=2.0,
+                                                model="matanyone2"),
         # 5b trimap -> per-frame ViTMatte on the head, temporally smoothed
         "vitmatte_960":  lambda c, p: trimap_vitmatte(c, p, base_width=960),
         # 5c cheap refinement
