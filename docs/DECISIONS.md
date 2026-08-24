@@ -121,3 +121,25 @@ Build **two truth tiers**, and never conflate them:
 
 Tier B is the more *relevant* hair test; Tier A is the more *trustworthy* number. Reporting
 both, separately, is the point.
+
+---
+
+## D3 — Hair experiments: what was tried and why (Task 4, 2026-08-23)
+
+Task 2 left one headline failure: the matte's softness is a ~2 px anti-aliased outline,
+not interior hair transparency. Five things were tried against measured truth. All five
+share the same oracle prompt, the same clips and the same metrics, so they differ only
+in what they compute.
+
+| # | Method | Hypothesis being tested |
+|---|---|---|
+| a | `fullres_1920` | The detail is lost to **resolution**: MatAnyone downsamples internally, so running the whole pipeline at 1920 rather than 960 should recover strands for free. |
+| a | `hairzoom_960` | Same hypothesis, cheaper: keep the pipeline at 960 but re-run the matting stage on a **2x magnified crop of the head only**, feathered back in. Pays for resolution only where it matters. |
+| b | `vitmatte_960` | The detail is lost to the **model class**: a dedicated image matter given a trimap can solve strands that a segmentation-derived video matter cannot. SAM 2 mask -> trimap with a wide unknown band at the hair -> per-frame ViTMatte on the head patch -> temporal smoothing (ViTMatte has no memory at all, so without it the boil comes straight back) -> blended into the MatAnyone alpha inside the unknown band. |
+| c | `guided_960` | The detail is already **in the plate**: a guided filter using the greyscale frame as guide should pull the alpha onto the image's own edges for almost no compute. The cheap-shot hypothesis, included precisely because it might have worked. |
+| d | `matanyone2_960` | The detail is lost to the **model generation**: MatAnyone 2 (CVPR 2026 Highlight, same authors) is explicitly about "avoiding segmentation-like boundaries". Chosen over VideoMaMa on evidence: same mask-guided interface as v1, an identical `InferenceCore.step()` API so it is a genuine drop-in, first-class MPS support in-tree, and one 135 MB checkpoint — where VideoMaMa is a diffusion-prior model whose cost on an 18 GB Mac is unproven. One candidate, per the brief. |
+
+Licence note: MatAnyone 2 is **S-Lab License 1.0, non-commercial**, exactly like v1, and
+is handled the same way — cloned to gitignored `vendor/`, never bundled. ViTMatte
+(`hustvl/vitmatte-small-composition-1k`) is **Apache-2.0**, which makes the trimap route
+the commercially usable option if that ever matters; that was the fallback flagged in D1.

@@ -27,5 +27,12 @@
     "alpha_soft_pixel_fraction": 0.005404,
     "alpha_distinct_values": 256,
     "alpha_coverage_mean": 0.17188
-  }
+  },
+  "oracle_clicks": [
+    [
+      1115,
+      599
+    ]
+  ],
+  "oracle_note": "One click, pinned. The default oracle takes the interior peak of the reference alpha, and here that lands on the NOTEPAD the subject is holding. SAM 2 then correctly returns the notepad (1.3% of frame) against a whole-person reference (17.2%), scoring MAD 157 / boundary-F 0.000 for a reason that is about subject ambiguity, not matte quality: the green-screen key counted the held object as foreground, a click cannot know that. The click is moved to her torso and written down here. Identical for every method."
 }

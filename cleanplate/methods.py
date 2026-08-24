@@ -206,6 +206,47 @@ def hair_zoom(clip, prompt: Prompt, base_width: int = 960, zoom: float = 2.0,
     return out, stats
 
 
+def fullres_matte(clip, prompt: Prompt, track_width: int = 960, device: str = "auto",
+                  model: str = "matanyone") -> tuple[np.ndarray, dict]:
+    """Track at 960, then run the MATTING stage at full resolution.
+
+    `fullres_1920` - running both stages at 1920 - turned out to answer the wrong
+    question. SAM 2's multi-mask head chooses a different granularity at a different
+    input resolution: on A3 the same relative click selected the woman's SKIN (face,
+    neck, chest) at 1920 where it selected the whole person at 960. The matting stage
+    was then handed a mask of the wrong object, and the clip scored MAD 149.
+
+    So the resolution hypothesis has to be tested with the segmentation held constant:
+    same 960 SAM 2 mask, upscaled, matted at full res. This isolates "does the matting
+    stage benefit from more pixels" from "does SAM 2 behave differently at 1920".
+    """
+    import cv2
+    ps = frame_paths(clip.frames_dir)
+    with Image.open(ps[0]) as im:
+        W, H = im.size
+
+    fdir, sc = _scaled_frames(Path(clip.frames_dir), track_width)
+    p = _scale_prompt(prompt, sc)
+    t0 = time.perf_counter()
+    masks, tstats = _cached_track(fdir, p, device)
+    t_track = time.perf_counter() - t0
+
+    big = np.stack([cv2.resize(m.astype(np.uint8) * 255, (W, H),
+                               interpolation=cv2.INTER_NEAREST) > 127 for m in masks])
+    t1 = time.perf_counter()
+    alpha, rstats = _refine.refine(Path(clip.frames_dir), big, device=device,
+                                   model=model, progress=None)
+    return alpha, {"track_width": track_width, "matte_width": W,
+                   "track_cached": bool(tstats.get("cached")),
+                   "track_s_per_frame": tstats["seconds_per_frame"],
+                   "track_total_s": round(t_track, 2),
+                   "refine_model": rstats["model"],
+                   "refine_s_per_frame": rstats["seconds_per_frame"],
+                   "refine_total_s": round(time.perf_counter() - t1, 2),
+                   "refine_fallback_ops": rstats["mps_fallback_ops"],
+                   "peak_rss_mb": round(peak_rss_mb(), 1)}
+
+
 # --------------------------------------------------------------- 5c: guided filter
 def guided_filter(guide_gray: np.ndarray, src: np.ndarray, radius: int = 8,
                   eps: float = 1e-4) -> np.ndarray:
@@ -358,6 +399,9 @@ def make(name: str):
         "baseline_960":  lambda c, p: sam2_matanyone(c, p, width=960),
         # 5a resolution
         "fullres_1920":  lambda c, p: sam2_matanyone(c, p, width=1920),
+        "fullmatte_1920": lambda c, p: fullres_matte(c, p, track_width=960),
+        "fullmatte2_1920": lambda c, p: fullres_matte(c, p, track_width=960,
+                                                      model="matanyone2"),
         "hairzoom_960":  lambda c, p: hair_zoom(c, p, base_width=960, zoom=2.0),
         # 5b trimap -> per-frame ViTMatte on the head, temporally smoothed
         "vitmatte_960":  lambda c, p: trimap_vitmatte(c, p, base_width=960),
