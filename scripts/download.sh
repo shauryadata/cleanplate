@@ -141,15 +141,39 @@ fetch_datasets() {
   log "now run:  python scripts/build_truth.py --tier all"
 }
 
+fetch_propainter() {
+  mkdir -p vendor
+  log "ProPainter is licensed S-Lab 1.0 - NON-COMMERCIAL USE ONLY. See THIRD_PARTY.md."
+  if [ -d vendor/propainter/.git ]; then
+    log "ProPainter already cloned"
+  else
+    git clone --depth 1 https://github.com/sczhou/ProPainter.git vendor/propainter
+    rm -rf vendor/propainter/assets vendor/propainter/inputs
+  fi
+  "$PY" -m pip install -q addict timm scikit-image imageio-ffmpeg yapf av
+  mkdir -p vendor/propainter/weights
+  local w
+  for w in ProPainter.pth recurrent_flow_completion.pth raft-things.pth; do
+    if [ -s "vendor/propainter/weights/$w" ]; then
+      log "weight already present: $w"
+    else
+      log "downloading $w"
+      curl -fL --retry 3 --progress-bar -o "vendor/propainter/weights/$w" \
+        "https://github.com/sczhou/ProPainter/releases/download/v0.1.0/$w"
+    fi
+  done
+}
+
 case "${1:-all}" in
   footage)     fetch_footage ;;
   sam2)        fetch_sam2 ;;
   checkpoints) fetch_checkpoints ;;
   matanyone)   fetch_matanyone ;;
   datasets)    fetch_datasets ;;
-  all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone ;;
+  propainter)  fetch_propainter ;;
+  all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone; fetch_propainter ;;
   truth)       fetch_footage; fetch_datasets ;;
-  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|datasets|truth|all]" >&2; exit 2 ;;
+  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|all]" >&2; exit 2 ;;
 esac
 
 log "done."

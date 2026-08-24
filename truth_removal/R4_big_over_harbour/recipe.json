@@ -1,0 +1,24 @@
+{
+  "name": "R4_big_over_harbour",
+  "bg": "datasets/backgrounds/tos_harbour_move.mp4",
+  "bg_kind": "video",
+  "scale": 1.35,
+  "dx": 0.05,
+  "dy": 0.0,
+  "start": 0,
+  "note": "moving background AND a much larger intruder: the big-occlusion case.",
+  "tier": "R",
+  "kind": "synthetic removal: the clean background IS the answer, by construction",
+  "width": 960,
+  "height": 400,
+  "frames": 96,
+  "foreground": "outputs/walk_v2/rgba",
+  "placement": {
+    "target_h": 540,
+    "target_w": 1296,
+    "ox": -120,
+    "oy": -70
+  },
+  "alpha_area_fraction": 0.16193,
+  "credits": "backgrounds: datasets/backgrounds/SOURCES.txt; foreground: Tears of Steel, (CC) Blender Foundation"
+}

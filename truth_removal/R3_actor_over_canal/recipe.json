@@ -1,0 +1,24 @@
+{
+  "name": "R3_actor_over_canal",
+  "bg": "datasets/backgrounds/tos_canal_move.mp4",
+  "bg_kind": "video",
+  "scale": 0.85,
+  "dx": 0.0,
+  "dy": 0.05,
+  "start": 0,
+  "note": "MOVING background. The fill has to be consistent with camera motion.",
+  "tier": "R",
+  "kind": "synthetic removal: the clean background IS the answer, by construction",
+  "width": 960,
+  "height": 400,
+  "frames": 96,
+  "foreground": "outputs/walk_v2/rgba",
+  "placement": {
+    "target_h": 340,
+    "target_w": 816,
+    "ox": 72,
+    "oy": 50
+  },
+  "alpha_area_fraction": 0.07854,
+  "credits": "backgrounds: datasets/backgrounds/SOURCES.txt; foreground: Tears of Steel, (CC) Blender Foundation"
+}

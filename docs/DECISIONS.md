@@ -143,3 +143,46 @@ Licence note: MatAnyone 2 is **S-Lab License 1.0, non-commercial**, exactly like
 is handled the same way — cloned to gitignored `vendor/`, never bundled. ViTMatte
 (`hustvl/vitmatte-small-composition-1k`) is **Apache-2.0**, which makes the trimap route
 the commercially usable option if that ever matters; that was the fallback flagged in D1.
+
+---
+
+## D4 — Video inpainting for removal: ProPainter (Task 5, 2026-08-24)
+
+**Decision.** Use **ProPainter** (ICCV 2023, `sczhou/ProPainter`) as the removal stage.
+
+### Candidates
+
+| | ProPainter | DiffuEraser | E2FGVI |
+|---|---|---|---|
+| Licence | **S-Lab 1.0, non-commercial** | **Apache-2.0** | NOASSERTION |
+| Approach | flow-guided propagation + transformer | diffusion, refines a ProPainter-style prior | flow-guided |
+| Memory, reported | 8 GB fp16 / 13 GB fp32 at 720x480x80f; 25 GB at 1280x720 | ~12 GB at 1280x720 | — |
+| Chunking | **yes** — `--subvideo_length`, default 80 | via resolution only | limited |
+| Apple Silicon | **yes, in-tree**: `model/misc.py:get_device()` returns `mps` and is *preferred over CUDA* | not stated | not stated |
+| Extra weights | 3 files, ~150 MB total | Stable Diffusion stack on top | 1 file |
+| Last pushed | 2025-02 | 2025-04 | 2023-04 |
+
+### Why ProPainter, on evidence
+
+1. **It is the only candidate with MPS support written into the repo.** `get_device()`
+   checks `torch.backends.mps.is_available()` *before* CUDA. Neither alternative mentions
+   Apple Silicon at all, and Task 4 showed that "it will probably work on MPS" is not a
+   safe assumption on an 18 GB machine.
+2. **It has the memory controls this project needs.** `--subvideo_length` chunks a long
+   shot, `--resize_ratio` trades resolution for memory, `--fp16` halves it. Our target —
+   96 frames at 960x400 — is 384k pixels/frame against the 345k of the reported
+   720x480 case, so the reported 8–13 GB is the right ballpark, and chunking brings it
+   under control. That maps directly onto the new memory-guard requirement.
+3. **DiffuEraser is a refiner, not a replacement.** It produces better completeness in
+   its own paper, but it works by improving a propagation-based prior, and it drags in a
+   Stable Diffusion sampling loop. A diffusion denoiser over 96 frames on MPS is exactly
+   the unproven, memory-hungry shape that cost forty minutes in Task 4. Its Apache-2.0
+   licence is a genuine advantage and the reason it stays on the shelf as the
+   commercially usable option — same role ViTMatte plays for matting.
+
+### Cost accepted
+
+**S-Lab License 1.0, non-commercial**, like MatAnyone. Handled identically: cloned into
+gitignored `vendor/propainter/`, driven through a thin adapter, never bundled, recorded
+in THIRD_PARTY.md. CleanPlate's MIT core does not depend on it — without ProPainter the
+app simply has no Remove mode.

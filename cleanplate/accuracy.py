@@ -181,3 +181,125 @@ def table(scores: list[dict], region: str = "whole_frame") -> str:
                 cells.append(f"{v:.4g}")
         out.append(f"| {name} | " + " | ".join(cells) + " |")
     return "\n".join(out)
+
+
+# ------------------------------------------------------- removal / inpainting
+def psnr(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray | None = None) -> float:
+    """Peak signal-to-noise ratio in dB. With a mask, only inside it.
+
+    For removal the whole-frame number is meaningless — most of the frame is untouched
+    and scores infinity. The hole is the only part under test.
+    """
+    p = pred.astype(np.float64)
+    g = gt.astype(np.float64)
+    if mask is not None:
+        m = mask.astype(bool)
+        if m.ndim == 2:
+            m = m[..., None]
+        m = np.broadcast_to(m, p.shape)
+        if not m.any():
+            return float("nan")
+        mse_v = float(((p - g) ** 2)[m].mean())
+    else:
+        mse_v = float(((p - g) ** 2).mean())
+    if mse_v <= 1e-12:
+        return 100.0
+    return float(10.0 * np.log10(255.0 ** 2 / mse_v))
+
+
+def ssim(pred: np.ndarray, gt: np.ndarray, mask: np.ndarray | None = None) -> float:
+    """Structural similarity. With a mask, averaged over the masked pixels only.
+
+    Computed on the full frame then averaged inside the mask, because SSIM needs a
+    spatial neighbourhood and cropping to a ragged hole would corrupt the windows.
+    """
+    from skimage.metrics import structural_similarity
+    _, s_map = structural_similarity(gt, pred, channel_axis=-1, data_range=255,
+                                     full=True)
+    s_map = s_map.mean(axis=-1)
+    if mask is None:
+        return float(s_map.mean())
+    m = mask.astype(bool)
+    return float(s_map[m].mean()) if m.any() else float("nan")
+
+
+def warping_error(frames: np.ndarray, mask: np.ndarray | None = None) -> float:
+    """Temporal warping error: how well frame t-1, warped by optical flow, predicts t.
+
+    Flow is estimated on the *result*, so a fill that flickers or crawls scores badly
+    even when every individual frame looks plausible. Reported x1e3. Lower is better.
+    """
+    import cv2
+    if len(frames) < 2:
+        return 0.0
+    errs = []
+    prev_gray = cv2.cvtColor(frames[0], cv2.COLOR_RGB2GRAY)
+    for i in range(1, len(frames)):
+        cur_gray = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
+        flow = cv2.calcOpticalFlowFarneback(prev_gray, cur_gray, None,
+                                            0.5, 3, 15, 3, 5, 1.2, 0)
+        h, w = cur_gray.shape
+        gx, gy = np.meshgrid(np.arange(w, dtype=np.float32),
+                             np.arange(h, dtype=np.float32))
+        warped = cv2.remap(frames[i - 1], gx + flow[..., 0], gy + flow[..., 1],
+                           cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        d = (warped.astype(np.float32) - frames[i].astype(np.float32)) / 255.0
+        d = (d ** 2).mean(axis=-1)
+        if mask is not None:
+            m = (mask[i] if mask.ndim == 3 else mask).astype(bool)
+            errs.append(float(d[m].mean()) if m.any() else 0.0)
+        else:
+            errs.append(float(d.mean()))
+        prev_gray = cur_gray
+    return float(np.mean(errs) * 1e3)
+
+
+def score_removal(pred: np.ndarray, gt: np.ndarray, holes: np.ndarray,
+                  label: str = "run") -> dict:
+    """Score a removal against the background it was supposed to reveal."""
+    if pred.shape != gt.shape:
+        raise ValueError(f"shape mismatch: {pred.shape} vs {gt.shape}")
+    hm = holes > 127 if holes.dtype != bool else holes
+    return {
+        "label": label, "frames": int(len(pred)),
+        "resolution": [int(pred.shape[2]), int(pred.shape[1])],
+        "hole_area_fraction": round(float(hm.mean()), 5),
+        "PSNR_hole": round(float(np.mean([psnr(p, g, m)
+                                          for p, g, m in zip(pred, gt, hm)])), 3),
+        "SSIM_hole": round(float(np.mean([ssim(p, g, m)
+                                          for p, g, m in zip(pred, gt, hm)])), 5),
+        "PSNR_frame": round(float(np.mean([psnr(p, g) for p, g in zip(pred, gt)])), 3),
+        "warp_err_hole": round(warping_error(pred, hm), 4),
+        "warp_err_gt": round(warping_error(gt, hm), 4),
+    }
+
+
+REMOVAL_ROWS = [
+    ("PSNR in the hole (dB, higher better)", "PSNR_hole", "higher"),
+    ("SSIM in the hole (higher better)", "SSIM_hole", "higher"),
+    ("PSNR whole frame (dB, higher better)", "PSNR_frame", "higher"),
+    ("Temporal warp error in the hole (x1e3, lower better)", "warp_err_hole", "lower"),
+    ("  same metric on the true background (reference floor)", "warp_err_gt", "lower"),
+    ("Hole area (fraction of frame)", "hole_area_fraction", "lower"),
+]
+
+
+def removal_table(scores: list[dict]) -> str:
+    if not scores:
+        return "_nothing scored_"
+    out = ["| Metric | " + " | ".join(s["label"] for s in scores) + " |",
+           "|---|" + "---|" * len(scores)]
+    for name, key, better in REMOVAL_ROWS:
+        vals = [s.get(key) for s in scores]
+        ok = [v for v in vals if v is not None]
+        best = (max(ok) if better == "higher" else min(ok)) if ok else None
+        cells = []
+        for v in vals:
+            if v is None:
+                cells.append("—")
+            elif best is not None and abs(v - best) < 1e-9 and not name.startswith("  "):
+                cells.append(f"**{v:.5g}**")
+            else:
+                cells.append(f"{v:.5g}")
+        out.append(f"| {name} | " + " | ".join(cells) + " |")
+    return "\n".join(out)

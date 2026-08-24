@@ -1,0 +1,24 @@
+{
+  "name": "R1_actor_over_mars",
+  "bg": "datasets/backgrounds/mars_clean.jpg",
+  "bg_kind": "image",
+  "scale": 0.85,
+  "dx": -0.18,
+  "dy": 0.06,
+  "start": 0,
+  "note": "static background, rocky texture. Easiest case: nothing to track.",
+  "tier": "R",
+  "kind": "synthetic removal: the clean background IS the answer, by construction",
+  "width": 960,
+  "height": 400,
+  "frames": 96,
+  "foreground": "outputs/walk_v2/rgba",
+  "placement": {
+    "target_h": 340,
+    "target_w": 816,
+    "ox": -101,
+    "oy": 54
+  },
+  "alpha_area_fraction": 0.07854,
+  "credits": "backgrounds: datasets/backgrounds/SOURCES.txt; foreground: Tears of Steel, (CC) Blender Foundation"
+}

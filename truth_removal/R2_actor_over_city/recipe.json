@@ -1,0 +1,24 @@
+{
+  "name": "R2_actor_over_city",
+  "bg": "datasets/backgrounds/tos_city_96s.jpg",
+  "bg_kind": "image",
+  "scale": 0.8,
+  "dx": 0.16,
+  "dy": 0.08,
+  "start": 0,
+  "note": "static background with hard architectural lines the fill must continue.",
+  "tier": "R",
+  "kind": "synthetic removal: the clean background IS the answer, by construction",
+  "width": 960,
+  "height": 400,
+  "frames": 96,
+  "foreground": "outputs/walk_v2/rgba",
+  "placement": {
+    "target_h": 320,
+    "target_w": 768,
+    "ox": 250,
+    "oy": 72
+  },
+  "alpha_area_fraction": 0.06958,
+  "credits": "backgrounds: datasets/backgrounds/SOURCES.txt; foreground: Tears of Steel, (CC) Blender Foundation"
+}

@@ -53,6 +53,20 @@ license; nothing here is relicensed by inclusion.
 - Why it is here: it won the Task 4 whole-frame benchmark at essentially baseline cost.
   See docs/BENCH.md and docs/DECISIONS.md D3.
 
+### ProPainter — Nanyang Technological University, S-Lab
+- Source: https://github.com/sczhou/ProPainter
+- Paper: Zhou et al., *ProPainter: Improving Propagation and Transformer for Video
+  Inpainting*, ICCV 2023.
+- **License: S-Lab License 1.0 — NON-COMMERCIAL USE ONLY**, verified from `LICENSE` at
+  the repository root. Same family and same handling as MatAnyone: cloned into
+  gitignored `vendor/propainter/`, driven as a subprocess by `cleanplate/remove.py`,
+  never bundled. Without it CleanPlate simply has no Remove mode; the MIT core is
+  unaffected.
+- Weights: `ProPainter.pth` (150 MB), `recurrent_flow_completion.pth` (19 MB),
+  `raft-things.pth` (20 MB), from GitHub release v0.1.0. Not committed.
+- Chosen over DiffuEraser (Apache-2.0) on measured grounds — see docs/DECISIONS.md D4.
+  DiffuEraser remains the commercially usable fallback if that is ever needed.
+
 ### ViTMatte — hustvl, via Hugging Face Transformers
 - Model: `hustvl/vitmatte-small-composition-1k`
 - **License: Apache-2.0** (per the Hugging Face model card metadata). This is the only
