@@ -46,8 +46,10 @@ NEAR_CLICK_PX = 12            # warn when a new click lands this close to an exi
 # pass over the head, which won the hair region outright.
 DEFAULT_REFINE = "matanyone2"
 HQ = {"label": "hair crop-and-zoom (2x) + MatAnyone 2",
-      "gain": "hair-region MAD 10.14 -> 6.33 (-37.6%) on the Task 4 truth set",
-      "cost": "about 0.56 s/frame against 0.20 s/frame, measured on 6 clips"}
+      "gain": "hair-region MAD 10.14 -> 6.33 (-37.6%) on the Task 4 truth set; "
+              "-10.6% on the one clip with reference alpha for a real backlit head",
+      "cost": "about +0.07 s/frame at 960 on the hair shot; 0.56 vs 0.20 s/frame "
+              "averaged over the Task 4 truth clips"}
 VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
 
@@ -651,7 +653,7 @@ def build() -> gr.Blocks:
                             dilate_n = gr.Slider(0, 20, value=10, step=1, label="Dilate")
                             erode_n = gr.Slider(0, 20, value=10, step=1, label="Erode")
                         hq_cb = gr.Checkbox(
-                            False,
+                            True,          # default ON - see docs/WORKFLOW_HAIR.md
                             label="High quality (hair)",
                             info=(f"{HQ['label']}. {HQ['gain']}. Costs {HQ['cost']} — "
                                   "the real figure lands in the timings table after a "
