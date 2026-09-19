@@ -146,8 +146,13 @@ def hair_box(gt: np.ndarray, top_fraction: float = 0.30,
             min(W, int(xs2.max()) + pad), min(H, cut + pad))
 
 
-def evaluate(method_name: str, fn, clip: Clip, save_dir: Path | None = None) -> dict:
-    """Run one method on one clip and score it. Returns a result record."""
+def evaluate(method_name: str, fn, clip: Clip, save_dir: Path | None = None,
+             keep: list | None = None) -> dict:
+    """Run one method on one clip and score it. Returns a result record.
+
+    If `keep` is a list, the predicted alpha is appended to it, so a caller can score
+    the same prediction against a second reference without running the method twice.
+    """
     gt = load_alpha(clip.alpha_dir)
     prompt = (oracle_objects_prompt(clip.oracle_objects) if clip.oracle_objects
               else oracle_prompt(gt, override=clip.oracle_clicks))
@@ -160,6 +165,8 @@ def evaluate(method_name: str, fn, clip: Clip, save_dir: Path | None = None) -> 
     if alpha.shape != gt.shape:
         raise ValueError(f"{method_name} on {clip.name}: alpha {alpha.shape} "
                          f"!= truth {gt.shape}")
+    if keep is not None:
+        keep.append(alpha)
 
     sc = accuracy.score(alpha, gt, f"{method_name}", hair_box=hb, ignore=ignore)
     sc.update({

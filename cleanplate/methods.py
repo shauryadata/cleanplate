@@ -323,6 +323,95 @@ def trimap_vitmatte(clip, prompt: Prompt, base_width: int = 960, band: int = 18,
     return out, stats
 
 
+# Restored in Task 6. Commit f176d41 removed these three functions while refactoring
+# hair_zoom for the app and left their registry entries pointing at nothing, so
+# guided_960 and fullmatte_* had been unrunnable since. Verbatim from f176d41^.
+def fullres_matte(clip, prompt: Prompt, track_width: int = 960, device: str = "auto",
+                  model: str = "matanyone") -> tuple[np.ndarray, dict]:
+    """Track at 960, then run the MATTING stage at full resolution.
+
+    `fullres_1920` - running both stages at 1920 - turned out to answer the wrong
+    question. SAM 2's multi-mask head chooses a different granularity at a different
+    input resolution: on A3 the same relative click selected the woman's SKIN (face,
+    neck, chest) at 1920 where it selected the whole person at 960. The matting stage
+    was then handed a mask of the wrong object, and the clip scored MAD 149.
+
+    So the resolution hypothesis has to be tested with the segmentation held constant:
+    same 960 SAM 2 mask, upscaled, matted at full res. This isolates "does the matting
+    stage benefit from more pixels" from "does SAM 2 behave differently at 1920".
+    """
+    import cv2
+    ps = frame_paths(clip.frames_dir)
+    with Image.open(ps[0]) as im:
+        W, H = im.size
+
+    fdir, sc = _scaled_frames(Path(clip.frames_dir), track_width)
+    p = _scale_prompt(prompt, sc)
+    t0 = time.perf_counter()
+    masks, tstats = _cached_track(fdir, p, device)
+    t_track = time.perf_counter() - t0
+
+    big = np.stack([cv2.resize(m.astype(np.uint8) * 255, (W, H),
+                               interpolation=cv2.INTER_NEAREST) > 127 for m in masks])
+    t1 = time.perf_counter()
+    alpha, rstats = _refine.refine(Path(clip.frames_dir), big, device=device,
+                                   model=model, progress=None)
+    return alpha, {"track_width": track_width, "matte_width": W,
+                   "track_cached": bool(tstats.get("cached")),
+                   "track_s_per_frame": tstats["seconds_per_frame"],
+                   "track_total_s": round(t_track, 2),
+                   "refine_model": rstats["model"],
+                   "refine_s_per_frame": rstats["seconds_per_frame"],
+                   "refine_total_s": round(time.perf_counter() - t1, 2),
+                   "refine_fallback_ops": rstats["mps_fallback_ops"],
+                   "peak_rss_mb": round(peak_rss_mb(), 1)}
+
+
+# --------------------------------------------------------------- 5c: guided filter
+def guided_filter(guide_gray: np.ndarray, src: np.ndarray, radius: int = 8,
+                  eps: float = 1e-4) -> np.ndarray:
+    """He et al. guided filter, single channel. Both inputs float32 in [0, 1].
+
+    Implemented here rather than pulled from opencv-contrib: it is a dozen box filters
+    and adding a whole extra OpenCV build for it is not worth it.
+    """
+    import cv2
+    k = (2 * radius + 1, 2 * radius + 1)
+    mean_i = cv2.blur(guide_gray, k)
+    mean_p = cv2.blur(src, k)
+    corr_i = cv2.blur(guide_gray * guide_gray, k)
+    corr_ip = cv2.blur(guide_gray * src, k)
+    var_i = corr_i - mean_i * mean_i
+    cov_ip = corr_ip - mean_i * mean_p
+    a = cov_ip / (var_i + eps)
+    b = mean_p - a * mean_i
+    return cv2.blur(a, k) * guide_gray + cv2.blur(b, k)
+
+
+def guided(clip, prompt: Prompt, base_width: int = 960, radius: int = 8,
+           eps: float = 1e-4, device: str = "auto",
+           model: str = "matanyone") -> tuple[np.ndarray, dict]:
+    """Baseline, then pull the alpha towards the plate's own edges with a guided filter.
+
+    The cheap hypothesis: the plate already knows where the hair is; a guided filter
+    transfers that structure onto the alpha for almost no compute.
+    """
+    import cv2
+    alpha, stats = sam2_matanyone(clip, prompt, width=base_width, device=device,
+                                  model=model)
+    ps = frame_paths(clip.frames_dir)
+    t0 = time.perf_counter()
+    out = np.empty_like(alpha)
+    for i, p in enumerate(ps):
+        g = np.asarray(Image.open(p).convert("L"), dtype=np.float32) / 255.0
+        a = alpha[i].astype(np.float32) / 255.0
+        out[i] = np.clip(guided_filter(g, a, radius, eps) * 255.0, 0, 255).astype(np.uint8)
+    stats.update({"guided_radius": radius, "guided_eps": eps,
+                  "guided_total_s": round(time.perf_counter() - t0, 2),
+                  "guided_s_per_frame": round((time.perf_counter() - t0) / len(ps), 4)})
+    return out, stats
+
+
 # --------------------------------------------------------------- registry
 def make(name: str):
     """Look up a method by name."""

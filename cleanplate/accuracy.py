@@ -227,6 +227,18 @@ def coverage(pred: np.ndarray, gt: np.ndarray, depth: int = 4,
             "false_px_mean": round(float(np.mean(false)), 1)}
 
 
+def _seq_scale(a: np.ndarray) -> float:
+    """The divisor `_as01` would apply to this whole sequence (255 or 1)."""
+    if a.dtype == bool:
+        return 1.0
+    return 255.0 if float(a.max()) > 1.0001 else 1.0
+
+
+def _frame01(a: np.ndarray, i: int, scale: float) -> np.ndarray:
+    return np.clip(a[i].astype(np.float32) / scale if scale != 1.0
+                   else a[i].astype(np.float32), 0.0, 1.0)
+
+
 def score(pred: np.ndarray, gt: np.ndarray, label: str = "run",
           hair_box: tuple[int, int, int, int] | None = None,
           ignore: np.ndarray | None = None) -> dict:
@@ -240,51 +252,94 @@ def score(pred: np.ndarray, gt: np.ndarray, label: str = "run",
     neutralised by setting the prediction equal to the reference there, so they add
     no error to any metric and cannot move a boundary. The same rule applies to every
     method.
+
+    Streams frame by frame with a one-frame lookback, so memory is a few frames rather
+    than several float copies of the sequence: at 1920x1012x96 the earlier whole-array
+    version peaked at 4.7 GB in scoring alone, too close to this machine's limit with
+    models resident. It reproduces that version's output exactly (tests/test_accuracy.py
+    and a check on a real Tier P clip).
     """
+    import cv2
     if pred.shape != gt.shape:
         raise ValueError(f"shape mismatch: {pred.shape} vs {gt.shape}")
-    p, g = _as01(pred), _as01(gt)
-    if ignore is not None:
-        p = np.where(ignore, g, p)
-    n = len(p)
+    n = len(pred)
+    sp, sg = _seq_scale(pred), _seq_scale(gt)
+    k_cov = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    regions = ["whole_frame"] + (["hair_region"] if hair_box is not None else [])
+    acc = {r: {"MAD": [], "MSE": [], "Grad": [], "BF": [], "dt": [], "mot": []}
+           for r in regions + ["band"]}
+    miss, false, frac, band_px = [], [], [], 0
+    prev = None
+    for i in range(n):
+        p, g = _frame01(pred, i, sp), _frame01(gt, i, sg)
+        if ignore is not None:
+            p = np.where(ignore[i], g, p)
+        W = acc["whole_frame"]
+        gp, gg = _grad_mag(p), _grad_mag(g)
+        d = p - g
+        W["MAD"].append(float(np.abs(d).mean() * 1e3))
+        W["MSE"].append(float((d * d).mean() * 1e3))
+        dg_ = gp - gg
+        W["Grad"].append(float((dg_ * dg_).sum() / dg_.size * 1e3))
+        W["BF"].append(boundary_f(p, g))
+        if hair_box is not None:
+            H, ph, gh = acc["hair_region"], _crop(p, hair_box), _crop(g, hair_box)
+            H["MAD"].append(mad(ph, gh)); H["MSE"].append(mse(ph, gh))
+            H["Grad"].append(grad_error(ph, gh)); H["BF"].append(boundary_f(ph, gh))
+        b = band_mask(g)
+        band_px += int(b.sum())
+        B = acc["band"]
+        if b.any():
+            B["MAD"].append(float(np.abs(d)[b].mean() * 1e3))
+            B["MSE"].append(float((d * d)[b].mean() * 1e3))
+            B["Grad"].append(float((dg_ * dg_)[b].mean() * 1e3))
+        if prev is not None:
+            pp, pg, pb = prev
+            dpv, dgv = p - pp, g - pg
+            e = dpv - dgv
+            W["dt"].append(float(np.sqrt(np.mean(e * e))))
+            W["mot"].append(float(np.sqrt(np.mean(dgv * dgv))))
+            if hair_box is not None:
+                ec, gc = _crop(e, hair_box), _crop(dgv, hair_box)
+                H["dt"].append(float(np.sqrt(np.mean(ec * ec))))
+                H["mot"].append(float(np.sqrt(np.mean(gc * gc))))
+            m = b | pb
+            if m.any():
+                B["dt"].append(float(np.sqrt(np.mean((dpv[m] - dgv[m]) ** 2))))
+                B["mot"].append(float(np.sqrt(np.mean(dgv[m] ** 2))))
+        prev = (p, g, b)
+        core = cv2.erode((g >= 0.98).astype(np.uint8), k_cov) > 0
+        clear = cv2.erode((g <= 0.02).astype(np.uint8), k_cov) > 0
+        mm = int((core & (p < 0.5)).sum())
+        miss.append(mm); false.append(int((clear & (p >= 0.5)).sum()))
+        frac.append(mm / max(int(core.sum()), 1))
 
-    def block(pp: np.ndarray, gg: np.ndarray) -> dict:
-        return {
-            "MAD": round(float(np.mean([mad(a, b) for a, b in zip(pp, gg)])), 4),
-            "MSE": round(float(np.mean([mse(a, b) for a, b in zip(pp, gg)])), 4),
-            "Grad": round(float(np.mean([grad_error(a, b) for a, b in zip(pp, gg)])), 4),
-            "dtSSD": round(dtssd(pp, gg), 4),
-            "BF": round(float(np.mean([boundary_f(a, b) for a, b in zip(pp, gg)])), 4),
-        }
+    def block(r: dict, bf: float | None = None) -> dict:
+        e = float(np.mean(r["dt"]) * 1e2) if r["dt"] else 0.0
+        m = float(np.mean(r["mot"]) * 1e2) if r["mot"] else 0.0
+        return {"MAD": round(float(np.mean(r["MAD"])), 4),
+                "MSE": round(float(np.mean(r["MSE"])), 4),
+                "Grad": round(float(np.mean(r["Grad"])), 4),
+                "dtSSD": round(e, 4),
+                "BF": round(float(np.mean(r["BF"])) if bf is None else bf, 4),
+                "dtSSDn": round(e / m, 4) if m > 0 else None,
+                "motion": round(m, 4)}
 
     out = {"label": label, "frames": int(n),
-           "resolution": [int(p.shape[2]), int(p.shape[1])],
-           "whole_frame": block(p, g)}
-    e, m = dtssd_parts(p, g)
-    out["whole_frame"]["dtSSDn"] = round(e / m, 4) if m > 0 else None
-    out["whole_frame"]["motion"] = round(m, 4)
+           "resolution": [int(pred.shape[2]), int(pred.shape[1])],
+           "whole_frame": block(acc["whole_frame"])}
     if hair_box is not None:
         out["hair_box"] = list(hair_box)
-        out["hair_region"] = block(_crop(p, hair_box), _crop(g, hair_box))
-        e, m = dtssd_parts(_crop(p, hair_box), _crop(g, hair_box))
-        out["hair_region"]["dtSSDn"] = round(e / m, 4) if m > 0 else None
-        out["hair_region"]["motion"] = round(m, 4)
-    bands = np.stack([band_mask(gg) for gg in g])
-    gm = [np.abs(_grad_mag(pp) - _grad_mag(gg)) for pp, gg in zip(p, g)]
-    e, m = dtssd_parts(p, g, bands)
-    out["band"] = {
-        "MAD": round(float(np.mean([np.abs(pp - gg)[b].mean() * 1e3
-                                    for pp, gg, b in zip(p, g, bands) if b.any()])), 4),
-        "MSE": round(float(np.mean([((pp - gg) ** 2)[b].mean() * 1e3
-                                    for pp, gg, b in zip(p, g, bands) if b.any()])), 4),
-        "Grad": round(float(np.mean([(d ** 2)[b].mean() * 1e3
-                                     for d, b in zip(gm, bands) if b.any()])), 4),
-        "dtSSD": round(e, 4),
-        "dtSSDn": round(e / m, 4) if m > 0 else None,
-        "motion": round(m, 4),
-        "BF": out["whole_frame"]["BF"],
-        "band_fraction": round(float(bands.mean()), 5)}
-    out["coverage"] = coverage(p, g)
+        out["hair_region"] = block(acc["hair_region"])
+    out["band"] = block(acc["band"], bf=out["whole_frame"]["BF"])
+    out["band"]["band_fraction"] = round(band_px / float(pred.size), 5)
+    miss_a, frac_a = np.array(miss), np.array(frac)
+    out["coverage"] = {"miss_px_mean": round(float(miss_a.mean()), 1),
+                       "miss_px_p95": round(float(np.percentile(miss_a, 95)), 1),
+                       "miss_px_max": int(miss_a.max()),
+                       "dropout_frames": int((frac_a > 0.0005).sum()),
+                       "worst_frame": int(np.argmax(miss_a)),
+                       "false_px_mean": round(float(np.mean(false)), 1)}
     return out
 
 
