@@ -1,0 +1,103 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "core",
+  "shot": "07_1b",
+  "axes": [
+    "fast motion",
+    "long hair",
+    "held object"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/07_1b/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/07_1b/linear_hd"
+  },
+  "window": [
+    233,
+    328
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": null,
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 241,
+        "best_plate_frame": 240,
+        "offset": -1,
+        "residual_best": 0.000701,
+        "residual_runner_up": 0.011314,
+        "ratio": 0.062,
+        "residual_by_offset": {
+          "-3": 0.031067,
+          "-2": 0.017605,
+          "-1": 0.000701,
+          "0": 0.011314,
+          "1": 0.01262,
+          "2": 0.012725,
+          "3": 0.01742
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.157
+      },
+      {
+        "cleaned_frame": 280,
+        "best_plate_frame": 279,
+        "offset": -1,
+        "residual_best": 0.000711,
+        "residual_runner_up": 0.035527,
+        "ratio": 0.02,
+        "residual_by_offset": {
+          "-3": 0.047346,
+          "-2": 0.035527,
+          "-1": 0.000711,
+          "0": 0.037506,
+          "1": 0.050762,
+          "2": 0.061792,
+          "3": 0.074071
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.144
+      },
+      {
+        "cleaned_frame": 320,
+        "best_plate_frame": 319,
+        "offset": -1,
+        "residual_best": 0.000848,
+        "residual_runner_up": 0.030388,
+        "ratio": 0.028,
+        "residual_by_offset": {
+          "-3": 0.054494,
+          "-2": 0.034432,
+          "-1": 0.000848,
+          "0": 0.030388,
+          "1": 0.045973,
+          "2": 0.06063,
+          "3": 0.07811
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.125
+      }
+    ]
+  },
+  "built": {
+    "refused": "significant late entrant at frame(s) [60] at full frame rate"
+  },
+  "excluded": "The held prop - a black cylinder covered in red and white tracking-marker balls - is held OUT of the key, presumably for a CG replacement. The reference then contradicts rule 2 (held objects are the subject), so rule 7 applies: excluded, not scored. Found when the full-rate lineage check refused the clip and the frames were inspected; the 8-frame selection pass had not caught it."
+}

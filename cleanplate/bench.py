@@ -17,6 +17,7 @@ from PIL import Image
 from . import accuracy
 from .ingest import frame_paths, resolve_frames_dir
 from .paths import ROOT, peak_rss_mb, rel
+from .methods import _prompt_record
 from .session import Prompt
 
 TRUTH = ROOT / "truth"
@@ -30,6 +31,9 @@ class Clip:
     alpha_dir: Path
     note: str = ""
     oracle_clicks: list | None = None
+    oracle_objects: list | None = None      # Tier P: one SAM 2 object per entry
+    group: str = "core"
+    has_ignore: bool = False
 
     @property
     def n(self) -> int:
@@ -44,17 +48,47 @@ def clips(tier: str | None = None) -> list[Clip]:
             continue
         rec = json.loads(rp.read_text())
         t = rec.get("tier", "?")
+        if rec.get("excluded"):               # kept on record with its reason, not scored
+            continue
         if tier and t.lower() != tier.lower():
             continue
         out.append(Clip(d.name, t, d / "frames", d / "alpha",
                         rec.get("recipe", {}).get("note", "") or rec.get("note", ""),
-                        rec.get("oracle_clicks")))
+                        rec.get("oracle_clicks"), rec.get("oracle_objects"),
+                        rec.get("group", "core"), (d / "ignore").is_dir()))
     return out
 
 
 def load_alpha(d: Path) -> np.ndarray:
     ps = sorted(d.glob("*.png"), key=lambda p: int(p.stem))
     return np.stack([np.asarray(Image.open(p).convert("L")) for p in ps])
+
+
+def oracle_objects_prompt(objects: list, frame: int = 0) -> list[Prompt]:
+    """Tier P: one Prompt per named object, as pinned in the clip's recipe.
+
+    The clicks were fixed from the reference alone, before any method was run on the
+    clip (see docs/SUBJECT_CONVENTION.md), and every method receives exactly these.
+    """
+    out = []
+    for o in objects:
+        p = Prompt()
+        for x, y in o["clicks"]:
+            p.add(int(o.get("frame", frame)), int(x), int(y), positive=True)
+        for x, y in o.get("negative", []):
+            p.add(int(o.get("frame", frame)), int(x), int(y), positive=False)
+        out.append(p)
+    return out
+
+
+def load_ignore(d: Path, n: int, hw: tuple[int, int]) -> np.ndarray | None:
+    """Ignore masks, where a clip has them: non-subject objects the key also holds."""
+    if not d.is_dir():
+        return None
+    out = np.zeros((n, *hw), bool)
+    for p in d.glob("*.png"):
+        out[int(p.stem)] = np.asarray(Image.open(p).convert("L")) > 127
+    return out
 
 
 def oracle_prompt(gt: np.ndarray, frame: int = 0,
@@ -115,8 +149,10 @@ def hair_box(gt: np.ndarray, top_fraction: float = 0.30,
 def evaluate(method_name: str, fn, clip: Clip, save_dir: Path | None = None) -> dict:
     """Run one method on one clip and score it. Returns a result record."""
     gt = load_alpha(clip.alpha_dir)
-    prompt = oracle_prompt(gt, override=clip.oracle_clicks)
+    prompt = (oracle_objects_prompt(clip.oracle_objects) if clip.oracle_objects
+              else oracle_prompt(gt, override=clip.oracle_clicks))
     hb = hair_box(gt)
+    ignore = load_ignore(Path(clip.alpha_dir).parent / "ignore", len(gt), gt.shape[1:])
 
     t0 = time.perf_counter()
     alpha, stats = fn(clip, prompt)
@@ -125,13 +161,13 @@ def evaluate(method_name: str, fn, clip: Clip, save_dir: Path | None = None) -> 
         raise ValueError(f"{method_name} on {clip.name}: alpha {alpha.shape} "
                          f"!= truth {gt.shape}")
 
-    sc = accuracy.score(alpha, gt, f"{method_name}", hair_box=hb)
+    sc = accuracy.score(alpha, gt, f"{method_name}", hair_box=hb, ignore=ignore)
     sc.update({
         "method": method_name, "clip": clip.name, "tier": clip.tier,
         "seconds_total": round(wall, 2),
         "seconds_per_frame": round(wall / max(len(gt), 1), 4),
         "peak_rss_mb": round(peak_rss_mb(), 1),
-        "prompt": [prompt.frames[f].to_dict() for f in prompt.prompt_frames],
+        "prompt": _prompt_record(prompt),
         "stage_stats": stats,
     })
     if save_dir:

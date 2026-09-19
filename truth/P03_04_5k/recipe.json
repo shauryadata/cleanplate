@@ -1,0 +1,175 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "core",
+  "shot": "04_5k",
+  "axes": [
+    "curly hair",
+    "two subjects",
+    "keyed props (lamp, desk)"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/04_5k/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/04_5k/linear_hd"
+  },
+  "window": [
+    92,
+    187
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "man (curly hair)",
+      "clicks": [
+        [
+          1373,
+          400
+        ],
+        [
+          1480,
+          800
+        ]
+      ]
+    },
+    {
+      "name": "woman",
+      "clicks": [
+        [
+          667,
+          373
+        ],
+        [
+          440,
+          640
+        ]
+      ]
+    },
+    {
+      "name": "desk lamp",
+      "clicks": [
+        [
+          747,
+          600
+        ]
+      ]
+    },
+    {
+      "name": "desk",
+      "clicks": [
+        [
+          400,
+          880
+        ]
+      ]
+    },
+    {
+      "name": "monitor, right edge",
+      "clicks": [
+        [
+          1853,
+          507
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 100,
+        "best_plate_frame": 99,
+        "offset": -1,
+        "residual_best": 0.000519,
+        "residual_runner_up": 0.007869,
+        "ratio": 0.066,
+        "residual_by_offset": {
+          "-3": 0.013349,
+          "-2": 0.007869,
+          "-1": 0.000519,
+          "0": 0.008652,
+          "1": 0.015234,
+          "2": 0.020933,
+          "3": 0.02602
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.141
+      },
+      {
+        "cleaned_frame": 139,
+        "best_plate_frame": 138,
+        "offset": -1,
+        "residual_best": 0.000553,
+        "residual_runner_up": 0.007274,
+        "ratio": 0.076,
+        "residual_by_offset": {
+          "-3": 0.012111,
+          "-2": 0.007676,
+          "-1": 0.000553,
+          "0": 0.007274,
+          "1": 0.011615,
+          "2": 0.015617,
+          "3": 0.018976
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.151
+      },
+      {
+        "cleaned_frame": 179,
+        "best_plate_frame": 178,
+        "offset": -1,
+        "residual_best": 0.000543,
+        "residual_runner_up": 0.015832,
+        "ratio": 0.034,
+        "residual_by_offset": {
+          "-3": 0.02706,
+          "-2": 0.017024,
+          "-1": 0.000543,
+          "0": 0.015832,
+          "1": 0.025238,
+          "2": 0.030847,
+          "3": 0.033515
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.14
+      }
+    ]
+  },
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      91,
+      186
+    ],
+    "key_frames": [
+      92,
+      187
+    ],
+    "alpha_coverage_mean": 0.56476,
+    "alpha_soft_pixel_fraction": 0.038235,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 0.0,
+    "ignored_frames": 0,
+    "downscaled_from_4k": true
+  },
+  "oracle_rule": "pinned parts: two people, a desk lamp, the desk and a monitor are one connected blob in the key; one object would pick one of them"
+}

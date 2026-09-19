@@ -65,18 +65,26 @@ def validate_prompt(prompt: Prompt, n_frames: int) -> None:
             "Add a positive click on the subject in the same frame.")
 
 
-def track(shot: "str | object", prompt: Prompt, device: str = "auto",
+def track(shot: "str | object", prompt: "Prompt | list[Prompt]", device: str = "auto",
           progress: ProgressFn = None,
           offload_video_to_cpu: bool = False,
           offload_state_to_cpu: bool = False) -> tuple[np.ndarray, dict]:
     """Propagate the prompt through every frame.
+
+    `prompt` is one Prompt (one object, the app's case) or a list of them, one per
+    object, tracked as separate SAM 2 objects and returned as their union. Several
+    objects exist for the benchmark: a professional key often holds two people, or a
+    person and a desk lamp, and one object id asked to cover disconnected things tends
+    to pick one of them. The single-object path is unchanged, bit for bit.
 
     Returns (masks, stats) where masks is a bool array of shape (N, H, W).
     """
     frames = frame_paths(shot)
     if not frames:
         raise FileNotFoundError(f"no frames for shot {shot!r}")
-    validate_prompt(prompt, len(frames))
+    objs = list(prompt) if isinstance(prompt, (list, tuple)) else [prompt]
+    for pr in objs:
+        validate_prompt(pr, len(frames))
     if not SAM2_CKPT.exists():
         raise FileNotFoundError(
             f"checkpoint missing: {SAM2_CKPT}\nRun ./scripts/download.sh checkpoints")
@@ -105,22 +113,25 @@ def track(shot: "str | object", prompt: Prompt, device: str = "auto",
             offload_state_to_cpu=offload_state_to_cpu)
         t_init = time.perf_counter() - t1
 
-        by_frame = prompt.for_sam2()
         with torch.inference_mode():
-            for f, e in by_frame.items():
-                pts = [*e["positive"], *e["negative"]]
-                labs = [1] * len(e["positive"]) + [0] * len(e["negative"])
-                predictor.add_new_points_or_box(
-                    inference_state=state, frame_idx=f, obj_id=1,
-                    points=np.array(pts, dtype=np.float32),
-                    labels=np.array(labs, dtype=np.int32))
+            for oid, pr in enumerate(objs, start=1):
+                for f, e in pr.for_sam2().items():
+                    pts = [*e["positive"], *e["negative"]]
+                    labs = [1] * len(e["positive"]) + [0] * len(e["negative"])
+                    predictor.add_new_points_or_box(
+                        inference_state=state, frame_idx=f, obj_id=oid,
+                        points=np.array(pts, dtype=np.float32),
+                        labels=np.array(labs, dtype=np.int32))
 
             t2 = time.perf_counter()
             masks: dict[int, np.ndarray] = {}
             per_frame: list[float] = []
             t_prev = t2
             for frame_idx, _obj_ids, video_res_masks in predictor.propagate_in_video(state):
-                masks[frame_idx] = (video_res_masks[0, 0] > 0.0).cpu().numpy()
+                if len(objs) == 1:
+                    masks[frame_idx] = (video_res_masks[0, 0] > 0.0).cpu().numpy()
+                else:
+                    masks[frame_idx] = (video_res_masks[:, 0] > 0.0).any(dim=0).cpu().numpy()
                 now = time.perf_counter()
                 per_frame.append(now - t_prev)
                 t_prev = now
@@ -152,8 +163,11 @@ def track(shot: "str | object", prompt: Prompt, device: str = "auto",
         "model_cfg": SAM2_CFG,
         "checkpoint": SAM2_CKPT.name,
         "frames": len(frames),
-        "prompts": [prompt.frames[f].to_dict() for f in prompt.prompt_frames],
-        "total_clicks": prompt.total_clicks,
+        "prompts": ([objs[0].frames[f].to_dict() for f in objs[0].prompt_frames]
+                    if len(objs) == 1 else
+                    [[pr.frames[f].to_dict() for f in pr.prompt_frames] for pr in objs]),
+        "objects": len(objs),
+        "total_clicks": sum(pr.total_clicks for pr in objs),
         "model_build_s": round(t_build, 2),
         "frame_load_s": round(t_init, 2),
         "propagate_s": round(t_prop, 2),

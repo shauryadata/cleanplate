@@ -1,0 +1,107 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "core",
+  "shot": "04_1a",
+  "axes": [
+    "small subject",
+    "thin limbs"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/04_1a/linear_hd",
+    "res": "linear_hd",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/04_1a/linear_hd"
+  },
+  "window": [
+    37,
+    132
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": null,
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": null,
+    "verdict": "REFUSED",
+    "problems": [
+      "offset differs across the window: [3, -3, -3]",
+      "frame 45: no clear minimum (best/runner-up 0.993)",
+      "frame 45: best spatial shift [2, 1], not (0, 0)",
+      "frame 84: no clear minimum (best/runner-up 0.972)",
+      "frame 84: best spatial shift [-2, -1], not (0, 0)",
+      "frame 124: no clear minimum (best/runner-up 0.978)",
+      "frame 124: best spatial shift [2, -1], not (0, 0)"
+    ],
+    "evidence": [
+      {
+        "cleaned_frame": 45,
+        "best_plate_frame": 48,
+        "offset": 3,
+        "residual_best": 0.028679,
+        "residual_runner_up": 0.028885,
+        "ratio": 0.993,
+        "residual_by_offset": {
+          "-3": 0.029366,
+          "-2": 0.029535,
+          "-1": 0.029434,
+          "0": 0.029312,
+          "1": 0.029236,
+          "2": 0.028885,
+          "3": 0.028679
+        },
+        "spatial_best_shift": [
+          2,
+          1
+        ],
+        "spatial_ratio": null
+      },
+      {
+        "cleaned_frame": 84,
+        "best_plate_frame": 81,
+        "offset": -3,
+        "residual_best": 0.016159,
+        "residual_runner_up": 0.016617,
+        "ratio": 0.972,
+        "residual_by_offset": {
+          "-3": 0.016159,
+          "-2": 0.016617,
+          "-1": 0.017136,
+          "0": 0.017578,
+          "1": 0.01825,
+          "2": 0.018929,
+          "3": 0.019531
+        },
+        "spatial_best_shift": [
+          -2,
+          -1
+        ],
+        "spatial_ratio": null
+      },
+      {
+        "cleaned_frame": 124,
+        "best_plate_frame": 121,
+        "offset": -3,
+        "residual_best": 0.019585,
+        "residual_runner_up": 0.02002,
+        "ratio": 0.978,
+        "residual_by_offset": {
+          "-3": 0.019585,
+          "-2": 0.02002,
+          "-1": 0.020508,
+          "0": 0.020804,
+          "1": 0.021057,
+          "2": 0.021271,
+          "3": 0.021263
+        },
+        "spatial_best_shift": [
+          2,
+          -1
+        ],
+        "spatial_ratio": null
+      }
+    ]
+  },
+  "excluded": "Alignment could not be proven. Within +/-3 frames there is no minimum (best/runner-up 0.97-0.99, offsets inconsistent, random spatial shifts). A coarse search of every 10th plate frame (0-490) and a fine search of 74-96 found only a smooth, shallow bowl: best plate 77 at residual 0.0142, within 5% of its neighbours and about 30x above a proven match (~0.0005). The key was pulled from a plate that is not in tearsofsteel-footage-exr as-is (stabilised, reframed or another take). Refused rather than scored against a truth that may not be the same frame."
+}

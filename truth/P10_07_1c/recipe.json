@@ -1,0 +1,185 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "stress",
+  "shot": "07_1c",
+  "axes": [
+    "stress: keyed set dressing",
+    "two subjects",
+    "platform"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/07_1c/linear_hd",
+    "res": "linear_hd",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/07_1c/linear_hd"
+  },
+  "window": [
+    147,
+    242
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "person, far left",
+      "clicks": [
+        [
+          620,
+          688
+        ]
+      ]
+    },
+    {
+      "name": "person, second left",
+      "clicks": [
+        [
+          760,
+          648
+        ]
+      ]
+    },
+    {
+      "name": "person, kneeling right",
+      "clicks": [
+        [
+          1120,
+          708
+        ]
+      ]
+    },
+    {
+      "name": "person, far right",
+      "clicks": [
+        [
+          1220,
+          588
+        ]
+      ]
+    },
+    {
+      "name": "floor platform",
+      "clicks": [
+        [
+          960,
+          908
+        ]
+      ]
+    },
+    {
+      "name": "equipment case, left",
+      "clicks": [
+        [
+          480,
+          728
+        ]
+      ]
+    },
+    {
+      "name": "boxes, right",
+      "clicks": [
+        [
+          1400,
+          748
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 155,
+        "best_plate_frame": 154,
+        "offset": -1,
+        "residual_best": 0.001587,
+        "residual_runner_up": 0.01001,
+        "ratio": 0.159,
+        "residual_by_offset": {
+          "-3": 0.016113,
+          "-2": 0.011475,
+          "-1": 0.001587,
+          "0": 0.01001,
+          "1": 0.013977,
+          "2": 0.018066,
+          "3": 0.021973
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.136
+      },
+      {
+        "cleaned_frame": 194,
+        "best_plate_frame": 193,
+        "offset": -1,
+        "residual_best": 0.001465,
+        "residual_runner_up": 0.015259,
+        "ratio": 0.096,
+        "residual_by_offset": {
+          "-3": 0.024078,
+          "-2": 0.015381,
+          "-1": 0.001465,
+          "0": 0.015259,
+          "1": 0.023682,
+          "2": 0.029297,
+          "3": 0.034973
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.143
+      },
+      {
+        "cleaned_frame": 234,
+        "best_plate_frame": 233,
+        "offset": -1,
+        "residual_best": 0.001221,
+        "residual_runner_up": 0.018021,
+        "ratio": 0.068,
+        "residual_by_offset": {
+          "-3": 0.02832,
+          "-2": 0.018021,
+          "-1": 0.001221,
+          "0": 0.020508,
+          "1": 0.033142,
+          "2": 0.044678,
+          "3": 0.053223
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.132
+      }
+    ]
+  },
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      146,
+      241
+    ],
+    "key_frames": [
+      147,
+      242
+    ],
+    "alpha_coverage_mean": 0.26843,
+    "alpha_soft_pixel_fraction": 0.007071,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 0.0,
+    "ignored_frames": 0,
+    "downscaled_from_4k": false
+  },
+  "oracle_rule": "pinned parts: stress: four kneeling people, cases and the floor platform are one blob"
+}

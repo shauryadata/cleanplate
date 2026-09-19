@@ -1,0 +1,180 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "stress",
+  "shot": "04_5n",
+  "axes": [
+    "stress: keyed set dressing",
+    "occlusion by props",
+    "curly hair"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/04_5n/linear_hd",
+    "res": "linear_hd",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/04_5n/linear_hd"
+  },
+  "window": [
+    93,
+    188
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "man",
+      "clicks": [
+        [
+          1130,
+          330
+        ],
+        [
+          1000,
+          660
+        ]
+      ]
+    },
+    {
+      "name": "desk lamp",
+      "clicks": [
+        [
+          580,
+          510
+        ]
+      ]
+    },
+    {
+      "name": "left rack",
+      "clicks": [
+        [
+          600,
+          660
+        ]
+      ]
+    },
+    {
+      "name": "front monitor",
+      "clicks": [
+        [
+          1400,
+          880
+        ]
+      ]
+    },
+    {
+      "name": "right equipment",
+      "clicks": [
+        [
+          1560,
+          640
+        ]
+      ]
+    },
+    {
+      "name": "left monitor",
+      "clicks": [
+        [
+          280,
+          840
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 101,
+        "best_plate_frame": 100,
+        "offset": -1,
+        "residual_best": 0.000427,
+        "residual_runner_up": 0.003937,
+        "ratio": 0.109,
+        "residual_by_offset": {
+          "-3": 0.005615,
+          "-2": 0.004013,
+          "-1": 0.000427,
+          "0": 0.003937,
+          "1": 0.005356,
+          "2": 0.006714,
+          "3": 0.008057
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.161
+      },
+      {
+        "cleaned_frame": 140,
+        "best_plate_frame": 139,
+        "offset": -1,
+        "residual_best": 0.000443,
+        "residual_runner_up": 0.004333,
+        "ratio": 0.102,
+        "residual_by_offset": {
+          "-3": 0.006195,
+          "-2": 0.004333,
+          "-1": 0.000443,
+          "0": 0.005081,
+          "1": 0.008736,
+          "2": 0.012207,
+          "3": 0.014404
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.163
+      },
+      {
+        "cleaned_frame": 180,
+        "best_plate_frame": 179,
+        "offset": -1,
+        "residual_best": 0.000412,
+        "residual_runner_up": 0.003784,
+        "ratio": 0.109,
+        "residual_by_offset": {
+          "-3": 0.00473,
+          "-2": 0.003784,
+          "-1": 0.000412,
+          "0": 0.003784,
+          "1": 0.004526,
+          "2": 0.005981,
+          "3": 0.008118
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.175
+      }
+    ]
+  },
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      92,
+      187
+    ],
+    "key_frames": [
+      93,
+      188
+    ],
+    "alpha_coverage_mean": 0.49468,
+    "alpha_soft_pixel_fraction": 0.025659,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 247.4,
+    "ignored_frames": 20,
+    "downscaled_from_4k": false
+  },
+  "oracle_rule": "pinned parts: stress: the man is one blob with a lamp, two equipment racks and three monitors; the body peak of the blob lands on a monitor"
+}

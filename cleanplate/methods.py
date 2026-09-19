@@ -23,7 +23,14 @@ from .session import Prompt
 WORK = ROOT / "outputs" / "_bench_work"
 
 
-def _cached_track(frames_dir: Path, prompt: Prompt, device: str
+def _prompt_record(prompt: "Prompt | list[Prompt]") -> list:
+    """JSON-able form of a prompt; a list of objects becomes a list of lists."""
+    if isinstance(prompt, (list, tuple)):
+        return [_prompt_record(p) for p in prompt]
+    return [prompt.frames[f].to_dict() for f in prompt.prompt_frames]
+
+
+def _cached_track(frames_dir: Path, prompt: "Prompt | list[Prompt]", device: str
                   ) -> tuple[np.ndarray, dict]:
     """SAM 2 masks, cached on disk.
 
@@ -31,9 +38,8 @@ def _cached_track(frames_dir: Path, prompt: Prompt, device: str
     same oracle prompt, so recomputing it once per method wastes about eighty seconds
     a clip. The key covers everything that changes the result.
     """
-    key = json.dumps({"dir": str(frames_dir),
-                      "prompt": [prompt.frames[f].to_dict()
-                                 for f in prompt.prompt_frames]}, sort_keys=True)
+    key = json.dumps({"dir": str(frames_dir), "prompt": _prompt_record(prompt)},
+                     sort_keys=True)
     tag = hashlib.sha1(key.encode()).hexdigest()[:12]
     cdir = WORK / "trackcache" / tag
     npz, meta = cdir / "masks.npz", cdir / "stats.json"
@@ -71,7 +77,9 @@ def _scaled_frames(frames_dir: Path, width: int) -> tuple[Path, float]:
     return out, scale
 
 
-def _scale_prompt(prompt: Prompt, s: float) -> Prompt:
+def _scale_prompt(prompt: "Prompt | list[Prompt]", s: float) -> "Prompt | list[Prompt]":
+    if isinstance(prompt, (list, tuple)):
+        return [_scale_prompt(p, s) for p in prompt]
     if s == 1.0:
         return prompt
     q = Prompt()

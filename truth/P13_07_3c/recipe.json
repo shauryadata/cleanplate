@@ -1,0 +1,145 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "short",
+  "shot": "07_3c",
+  "axes": [
+    "short",
+    "fast motion",
+    "motion blur",
+    "rope"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/07_3c/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/07_3c/linear_hd"
+  },
+  "window": [
+    40,
+    115
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "soldier",
+      "clicks": [
+        [
+          690,
+          148
+        ],
+        [
+          760,
+          508
+        ]
+      ]
+    },
+    {
+      "name": "rope",
+      "clicks": [
+        [
+          1096,
+          668
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 48,
+        "best_plate_frame": 47,
+        "offset": -1,
+        "residual_best": 0.000453,
+        "residual_runner_up": 0.017804,
+        "ratio": 0.025,
+        "residual_by_offset": {
+          "-3": 0.022224,
+          "-2": 0.018669,
+          "-1": 0.000453,
+          "0": 0.017804,
+          "1": 0.021609,
+          "2": 0.02312,
+          "3": 0.024822
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.162
+      },
+      {
+        "cleaned_frame": 77,
+        "best_plate_frame": 76,
+        "offset": -1,
+        "residual_best": 0.000454,
+        "residual_runner_up": 0.013451,
+        "ratio": 0.034,
+        "residual_by_offset": {
+          "-3": 0.01701,
+          "-2": 0.013451,
+          "-1": 0.000454,
+          "0": 0.014096,
+          "1": 0.017227,
+          "2": 0.018782,
+          "3": 0.019497
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.168
+      },
+      {
+        "cleaned_frame": 107,
+        "best_plate_frame": 106,
+        "offset": -1,
+        "residual_best": 0.000409,
+        "residual_runner_up": 0.010499,
+        "ratio": 0.039,
+        "residual_by_offset": {
+          "-3": 0.016168,
+          "-2": 0.010499,
+          "-1": 0.000409,
+          "0": 0.011805,
+          "1": 0.018481,
+          "2": 0.020472,
+          "3": 0.02073
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.168
+      }
+    ]
+  },
+  "built": {
+    "frames": 76,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      39,
+      114
+    ],
+    "key_frames": [
+      40,
+      115
+    ],
+    "alpha_coverage_mean": 0.22543,
+    "alpha_soft_pixel_fraction": 0.015122,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 66.6,
+    "ignored_frames": 6,
+    "downscaled_from_4k": true
+  },
+  "oracle_rule": "pinned parts: the rope is keyed with him; a two-click person prompt would not cover it"
+}

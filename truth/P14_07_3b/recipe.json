@@ -1,0 +1,157 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "short",
+  "shot": "07_3b",
+  "axes": [
+    "short",
+    "held object (rifle)",
+    "rope"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/07_3b/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/07_3b/linear_hd"
+  },
+  "window": [
+    55,
+    123
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "soldier",
+      "clicks": [
+        [
+          1150,
+          556
+        ],
+        [
+          1200,
+          736
+        ]
+      ]
+    },
+    {
+      "name": "rope",
+      "clicks": [
+        [
+          900,
+          176
+        ],
+        [
+          820,
+          876
+        ]
+      ]
+    },
+    {
+      "name": "rifle (held)",
+      "clicks": [
+        [
+          1000,
+          736
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 63,
+        "best_plate_frame": 62,
+        "offset": -1,
+        "residual_best": 0.000438,
+        "residual_runner_up": 0.018087,
+        "ratio": 0.024,
+        "residual_by_offset": {
+          "-3": 0.042737,
+          "-2": 0.027428,
+          "-1": 0.000438,
+          "0": 0.018087,
+          "1": 0.024164,
+          "2": 0.032598,
+          "3": 0.039152
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.157
+      },
+      {
+        "cleaned_frame": 89,
+        "best_plate_frame": 88,
+        "offset": -1,
+        "residual_best": 0.000518,
+        "residual_runner_up": 0.015933,
+        "ratio": 0.032,
+        "residual_by_offset": {
+          "-3": 0.023686,
+          "-2": 0.016003,
+          "-1": 0.000518,
+          "0": 0.015933,
+          "1": 0.023832,
+          "2": 0.027646,
+          "3": 0.025237
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.146
+      },
+      {
+        "cleaned_frame": 115,
+        "best_plate_frame": 114,
+        "offset": -1,
+        "residual_best": 0.00049,
+        "residual_runner_up": 0.019437,
+        "ratio": 0.025,
+        "residual_by_offset": {
+          "-3": 0.020919,
+          "-2": 0.019437,
+          "-1": 0.00049,
+          "0": 0.021585,
+          "1": 0.034977,
+          "2": 0.036711,
+          "3": 0.029478
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.166
+      }
+    ]
+  },
+  "built": {
+    "frames": 69,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      54,
+      122
+    ],
+    "key_frames": [
+      55,
+      123
+    ],
+    "alpha_coverage_mean": 0.23166,
+    "alpha_soft_pixel_fraction": 0.023186,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 236.8,
+    "ignored_frames": 12,
+    "downscaled_from_4k": true
+  },
+  "oracle_rule": "pinned parts: the rope runs to the top of frame, so the head rule clicked the rope; the rifle is held and keyed"
+}

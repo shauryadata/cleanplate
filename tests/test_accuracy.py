@@ -127,6 +127,87 @@ def main() -> None:
     except ValueError:
         check("raises on shape mismatch", True)
 
+
+    # ------------------------------------------------------------------ Task 6
+    rng = np.random.default_rng(6)
+    N, H, W = 24, 96, 128
+
+    def moving(speed: float, soft: float = 3.0) -> np.ndarray:
+        return np.stack([disc(H, W, 48, 30 + speed * t, 18, soft) for t in range(N)])
+
+    print("\n10. dtSSD-n: a frozen matte scores exactly 1.0, whatever the shot's speed")
+    for sp in (0.25, 2.0):
+        ref = moving(sp)
+        frozen = np.repeat(ref[:1], N, axis=0)
+        check(f"frozen matte -> dtSSD-n == 1.0 at speed {sp} px/frame",
+              abs(A.dtssd_norm(frozen, ref) - 1.0) < 1e-6, f"{A.dtssd_norm(frozen, ref):.6f}")
+    check("perfect matte -> dtSSD-n == 0", A.dtssd_norm(moving(1.0), moving(1.0)) == 0.0)
+
+    print("\n11. the gap dtSSD-n closes: freezing on a slow shot is nearly free in a mean")
+    # Within one shot dtSSD-n is dtSSD over a constant, so it cannot reorder methods
+    # there. The gap is in aggregation: a slow shot's dtSSD is small whatever you do,
+    # so a method that simply freezes on it loses almost nothing in a cross-shot mean
+    # dominated by fast shots. (A first draft of this test asserted a within-shot
+    # reversal, which is mathematically impossible - kept here as the lesson.)
+    slow, fast = moving(0.25), moving(3.0)
+    def boil(ref, sd):
+        return np.clip(ref + rng.normal(0, sd, ref.shape) * (ref > 0.01), 0, 1)
+    A_ = (np.repeat(slow[:1], N, axis=0), boil(fast, 0.01))   # frozen on slow, good on fast
+    B_ = (boil(slow, 0.01), boil(fast, 0.04))                  # tracks both, noisier on fast
+    mean_d = lambda m: (A.dtssd(m[0], slow) + A.dtssd(m[1], fast)) / 2
+    mean_n = lambda m: (A.dtssd_norm(m[0], slow) + A.dtssd_norm(m[1], fast)) / 2
+    check("mean plain dtSSD ranks the method that froze FIRST (the known gap)",
+          mean_d(A_) < mean_d(B_), f"froze {mean_d(A_):.3f} < tracked {mean_d(B_):.3f}")
+    check("mean dtSSD-n exposes the freeze and ranks it last",
+          mean_n(A_) > mean_n(B_), f"froze {mean_n(A_):.3f} > tracked {mean_n(B_):.3f}")
+    check("and says why: the frozen shot scores exactly 1.0",
+          abs(A.dtssd_norm(A_[0], slow) - 1.0) < 1e-6)
+    fast = moving(3.0)
+    frozen_fast = np.repeat(fast[:1], N, axis=0)
+    honest_fast = boil(fast, 0.02)
+    check("on a fast shot the tracking matte beats frozen on dtSSD-n",
+          A.dtssd_norm(honest_fast, fast) < A.dtssd_norm(frozen_fast, fast),
+          f"{A.dtssd_norm(honest_fast, fast):.3f} < {A.dtssd_norm(frozen_fast, fast):.3f}")
+
+    print("\n12. a one-frame lag - the Tier P off-by-one, had it gone unnoticed")
+    ref = moving(2.0)
+    lag = np.concatenate([ref[:1], ref[:-1]])
+    sc = A.score(lag, ref, "lag")
+    check("a matte one frame late is not free: MAD > 0 and dtSSD-n > 0",
+          sc["whole_frame"]["MAD"] > 0 and sc["whole_frame"]["dtSSDn"] > 0,
+          f"MAD {sc['whole_frame']['MAD']:.2f}, dtSSD-n {sc['whole_frame']['dtSSDn']:.3f}")
+
+    print("\n13. ignore: error inside an ignored region costs nothing, outside it does")
+    ref = moving(1.0)
+    bad = ref.copy(); bad[:, 0:20, 100:120] = 1.0       # a blob the key also holds
+    ig = np.zeros(ref.shape, bool); ig[:, 0:20, 100:120] = True
+    check("ignored error -> MAD == 0", A.score(bad, ref, "x", ignore=ig)["whole_frame"]["MAD"] == 0)
+    check("the same error un-ignored -> MAD > 0", A.score(bad, ref, "x")["whole_frame"]["MAD"] > 0)
+
+    print("\n14. coverage: a hole in the subject is a dropout, an edge shift is not")
+    ref = np.stack([disc(H, W, 48, 64, 30, 0.0)] * N)
+    holed = ref.copy(); holed[10:14, 40:52, 58:70] = 0.0  # 4 frames, 12x12 hole, deep inside
+    shifted = np.stack([disc(H, W, 48, 66, 30, 0.0)] * N) # whole matte 2 px off
+    ch, cs = A.coverage(holed, ref), A.coverage(shifted, ref)
+    check("interior hole -> 4 dropout frames", ch["dropout_frames"] == 4, str(ch["dropout_frames"]))
+    check("2 px edge shift -> 0 misses (edge error is not coverage)", cs["miss_px_max"] == 0,
+          str(cs["miss_px_max"]))
+
+    print("\n15. band: detail error shows in the band, interior error does not")
+    ref = np.stack([disc(H, W, 48, 64, 30, 6.0)] * N)
+    edge_err = np.stack([disc(H, W, 48, 64, 30, 1.0)] * N)   # hard where truth is soft
+    sc = A.score(edge_err, ref, "edge")
+    check("band MAD > whole-frame MAD for an edge-only error",
+          sc["band"]["MAD"] > sc["whole_frame"]["MAD"],
+          f"band {sc['band']['MAD']:.1f} vs whole {sc['whole_frame']['MAD']:.1f}")
+
+    print("\n16. soft depth: recovers a known ramp width")
+    for ramp in (2.0, 6.0):
+        a = disc(200, 200, 100, 100, 60, ramp)
+        dd = A.soft_depth(a)
+        check(f"ramp {ramp:.0f} px -> median depth about {ramp / 2:.0f} px",
+              abs(dd - ramp / 2) <= 1.0, f"{dd:.2f}")
+
     print("\n" + ("ALL ACCURACY METRICS VALIDATED" if not FAILS
                   else f"{len(FAILS)} FAILURES: {FAILS}"))
     sys.exit(1 if FAILS else 0)

@@ -1,0 +1,143 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "short",
+  "shot": "04_3b",
+  "axes": [
+    "short",
+    "held object (notepad): the A4 case"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/04_3b/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/04_3b/linear_hd"
+  },
+  "window": [
+    170,
+    238
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "man",
+      "clicks": [
+        [
+          1090,
+          430
+        ],
+        [
+          1090,
+          660
+        ]
+      ]
+    },
+    {
+      "name": "notepad (held)",
+      "clicks": [
+        [
+          990,
+          490
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 178,
+        "best_plate_frame": 177,
+        "offset": -1,
+        "residual_best": 4.6e-05,
+        "residual_runner_up": 0.007828,
+        "ratio": 0.006,
+        "residual_by_offset": {
+          "-3": 0.018765,
+          "-2": 0.010148,
+          "-1": 4.6e-05,
+          "0": 0.007828,
+          "1": 0.010092,
+          "2": 0.011092,
+          "3": 0.011538
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.005
+      },
+      {
+        "cleaned_frame": 204,
+        "best_plate_frame": 203,
+        "offset": -1,
+        "residual_best": 4.3e-05,
+        "residual_runner_up": 0.020514,
+        "ratio": 0.002,
+        "residual_by_offset": {
+          "-3": 0.039878,
+          "-2": 0.022994,
+          "-1": 4.3e-05,
+          "0": 0.020514,
+          "1": 0.03259,
+          "2": 0.038939,
+          "3": 0.041761
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.005
+      },
+      {
+        "cleaned_frame": 230,
+        "best_plate_frame": 229,
+        "offset": -1,
+        "residual_best": 4.5e-05,
+        "residual_runner_up": 0.007161,
+        "ratio": 0.006,
+        "residual_by_offset": {
+          "-3": 0.009445,
+          "-2": 0.007161,
+          "-1": 4.5e-05,
+          "0": 0.008385,
+          "1": 0.012631,
+          "2": 0.017065,
+          "3": 0.020354
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.005
+      }
+    ]
+  },
+  "built": {
+    "frames": 69,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      169,
+      237
+    ],
+    "key_frames": [
+      170,
+      238
+    ],
+    "alpha_coverage_mean": 0.04124,
+    "alpha_soft_pixel_fraction": 0.002483,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 0.0,
+    "ignored_frames": 0,
+    "downscaled_from_4k": true
+  },
+  "oracle_rule": "pinned parts: the A4 case with professional truth: a held notepad, keyed with him"
+}

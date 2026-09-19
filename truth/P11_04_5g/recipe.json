@@ -1,0 +1,176 @@
+{
+  "tier": "P",
+  "kind": "professional reference: the compositor's own key. A professional key, still a key - not a hand-painted or rendered ground truth.",
+  "group": "stress",
+  "shot": "04_5g",
+  "axes": [
+    "stress: keyed set dressing",
+    "three subjects",
+    "tables"
+  ],
+  "source": {
+    "cleaned": "tearsofsteel-cleaned-exr/04_5g/linear",
+    "res": "linear",
+    "digits": 4,
+    "plate": "tearsofsteel-footage-exr/04_5g/linear_hd"
+  },
+  "window": [
+    63,
+    158
+  ],
+  "window_rule": "contiguous 96 frames nearest the shot centre in which every significant component descends from one on the first frame (scripts/select_pro.py)",
+  "gamma": 2.2,
+  "footage_credit": "(CC) Blender Foundation | mango.blender.org, CC BY 3.0",
+  "oracle_objects": [
+    {
+      "name": "person, left",
+      "clicks": [
+        [
+          980,
+          576
+        ]
+      ]
+    },
+    {
+      "name": "person, centre",
+      "clicks": [
+        [
+          1060,
+          636
+        ]
+      ]
+    },
+    {
+      "name": "person, right",
+      "clicks": [
+        [
+          1440,
+          696
+        ]
+      ]
+    },
+    {
+      "name": "monitors",
+      "clicks": [
+        [
+          900,
+          756
+        ]
+      ]
+    },
+    {
+      "name": "table, centre",
+      "clicks": [
+        [
+          1120,
+          876
+        ]
+      ]
+    },
+    {
+      "name": "table, right",
+      "clicks": [
+        [
+          1700,
+          776
+        ]
+      ]
+    }
+  ],
+  "alignment": {
+    "method": "median |plate - key| over opaque key pixels, red channel, linear light; offsets [-3, -2, -1, 0, 1, 2, 3]",
+    "offset": -1,
+    "verdict": "PROVEN",
+    "problems": [],
+    "evidence": [
+      {
+        "cleaned_frame": 71,
+        "best_plate_frame": 70,
+        "offset": -1,
+        "residual_best": 0.000775,
+        "residual_runner_up": 0.003446,
+        "ratio": 0.225,
+        "residual_by_offset": {
+          "-3": 0.003866,
+          "-2": 0.003613,
+          "-1": 0.000775,
+          "0": 0.003446,
+          "1": 0.003958,
+          "2": 0.004405,
+          "3": 0.00449
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.143
+      },
+      {
+        "cleaned_frame": 110,
+        "best_plate_frame": 109,
+        "offset": -1,
+        "residual_best": 0.000774,
+        "residual_runner_up": 0.003519,
+        "ratio": 0.22,
+        "residual_by_offset": {
+          "-3": 0.003797,
+          "-2": 0.003531,
+          "-1": 0.000774,
+          "0": 0.003519,
+          "1": 0.003693,
+          "2": 0.003951,
+          "3": 0.004177
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.144
+      },
+      {
+        "cleaned_frame": 150,
+        "best_plate_frame": 149,
+        "offset": -1,
+        "residual_best": 0.00076,
+        "residual_runner_up": 0.003235,
+        "ratio": 0.235,
+        "residual_by_offset": {
+          "-3": 0.003457,
+          "-2": 0.003235,
+          "-1": 0.00076,
+          "0": 0.003323,
+          "1": 0.003628,
+          "2": 0.00358,
+          "3": 0.003778
+        },
+        "spatial_best_shift": [
+          0,
+          0
+        ],
+        "spatial_ratio": 0.144
+      }
+    ]
+  },
+  "built": {
+    "frames": 96,
+    "resolution": [
+      1920,
+      1012
+    ],
+    "plate_frames": [
+      62,
+      157
+    ],
+    "key_frames": [
+      63,
+      158
+    ],
+    "alpha_coverage_mean": 0.22851,
+    "alpha_soft_pixel_fraction": 0.01739,
+    "alpha_distinct_values": 256,
+    "ignored_pixels_mean": 112.4,
+    "ignored_frames": 39,
+    "downscaled_from_4k": true
+  },
+  "oracle_rule": "pinned parts: stress: three people behind monitors and two runs of tables, one blob"
+}
