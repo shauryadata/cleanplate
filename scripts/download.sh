@@ -2,7 +2,7 @@
 # Re-fetch everything that is deliberately NOT committed to this repository:
 # the Tears of Steel footage, the SAM 2 source tree, and the SAM 2.1 checkpoints.
 #
-# Usage:  ./scripts/download.sh [footage|sam2|checkpoints|all]
+# Usage:  ./scripts/download.sh [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|pro|all]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -164,6 +164,23 @@ fetch_propainter() {
   done
 }
 
+# RotoBench Tier P: the Mango team's own keys (tearsofsteel-cleaned-exr, channel 4) and
+# the raw plates they were pulled from. CC BY 3.0, (CC) Blender Foundation |
+# mango.blender.org. Only the committed windows are fetched - about 15 GB of EXR across
+# the 12 clips at 30-40 MB/s from xiph - and every clip re-proves its plate/key
+# alignment from pixels before it is written. The recipes in truth/P*/recipe.json are
+# the source of truth; nothing here is chosen at fetch time.
+fetch_pro() {
+  local free_gb; free_gb=$(df -g . | awk 'NR==2{print $4}')
+  log "Tier P needs about 15 GB of raw EXR plus 0.7 GB built; ${free_gb} GB free here"
+  if [ "${free_gb:-0}" -lt 20 ]; then
+    echo "   under 20 GB free - refusing to start. Free space, then re-run." >&2; exit 1
+  fi
+  OPENCV_IO_ENABLE_OPENEXR=1 "$PY" scripts/build_pro_truth.py
+  log "raw EXR can be deleted afterwards (rm -rf datasets/tos_pro/*/); the built clips"
+  log "in truth/P*/ are all the benchmark reads, and this target rebuilds them"
+}
+
 case "${1:-all}" in
   footage)     fetch_footage ;;
   sam2)        fetch_sam2 ;;
@@ -173,7 +190,8 @@ case "${1:-all}" in
   propainter)  fetch_propainter ;;
   all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone; fetch_propainter ;;
   truth)       fetch_footage; fetch_datasets ;;
-  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|all]" >&2; exit 2 ;;
+  pro)         fetch_pro ;;
+  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|pro|all]" >&2; exit 2 ;;
 esac
 
 log "done."
