@@ -186,3 +186,35 @@ the commercially usable option if that ever matters; that was the fallback flagg
 gitignored `vendor/propainter/`, driven through a thin adapter, never bundled, recorded
 in THIRD_PARTY.md. CleanPlate's MIT core does not depend on it — without ProPainter the
 app simply has no Remove mode.
+
+## D5 — Harmonize v0: what the review kept, and what it cannot do
+
+**Reviewed by eye on the walk-over-Mars comp, Task 7, with before/after renders**
+(`scripts/harmonize_review.py`, outputs in `outputs/_harmonize/`).
+
+| Option | Measured | Verdict |
+|---|---|---|
+| Colour, **full match at strength 0.5** | gain 0.875, offset +23/+12/+7 (his mean [76, 92, 93] against the plate's [102, 92, 84]) | **Kept, enabled by default** for image backdrops |
+| Colour, cast only at 0.4 | gain 1.10/0.98/0.94, no level change | Implemented, not the default (`--harmonize-mode cast`) |
+| Grain match | plate 0.65 vs upscaled panorama 0.45 → **+0.00 added** | Kept, inert on this comp; it only fires when the background is grainier than the cut-out, which is the case for real plates |
+| Background 2D track | plate pans **−1166 px in x, +91 in y** over 96 frames, measured from background pixels only | **Kept, opt-in** (`--track-bg`): used for the reel's Mars shot, off by default because it needs a background with the resolution to survive the pan |
+
+Both are global and static for the whole shot, deliberately: a per-frame match on a
+moving matte is a flicker generator.
+
+**What harmonize v0 does not do**, and what will still look wrong in the reel: nothing
+directional (a subject lit from the left dropped into a plate lit from the right stays
+wrong), no contact shadow, no light wrap, no per-region control — a face and a dark
+jacket get the same gain, which is why the strength is a half and not a one.
+
+Two bugs found while building it, both worth recording because both produced
+plausible-looking wrong answers:
+
+- The grain estimator (MAD of image minus a median blur) returned **0.00 for every
+  image**, because most of a frame is flat and a median filter changes nothing there.
+  Replaced with Immerkaer's estimator, which measures 0.65 on the plate and 1.72 on a
+  real background.
+- The first review render used a background crop beyond the panorama's bounds, so half
+  the "plate" was black — and the colour match dutifully learned that the background
+  was nearly black and tried to darken the subject by 20 levels. The crop is now chosen
+  by searching for the largest black-free band that needs the least upscaling.

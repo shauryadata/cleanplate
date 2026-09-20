@@ -69,6 +69,15 @@ def main() -> None:
     ap.add_argument("--compare-with", metavar="RUN")
     ap.add_argument("--compare-labels", nargs=2, default=["v1", "v2"])
     ap.add_argument("--keep-frames", action="store_true")
+    # Harmonize v0. Reviewed on the walk-over-Mars comp (docs/DECISIONS.md D5): the full
+    # match at 0.5 was chosen as the default; the background track helps only when the
+    # camera actually moves, so it is opt-in.
+    ap.add_argument("--no-harmonize", action="store_true",
+                    help="skip the colour/exposure match of foreground to plate")
+    ap.add_argument("--harmonize-strength", type=float, default=0.5)
+    ap.add_argument("--harmonize-mode", choices=["full", "cast"], default="full")
+    ap.add_argument("--track-bg", action="store_true",
+                    help="pan the plate by the shot's own measured 2D translation")
     args = ap.parse_args()
 
     name = args.out_name or args.shot
@@ -91,9 +100,36 @@ def main() -> None:
     print(f"[comp] shot={args.shot}  {len(paths)} frames at {size[0]}x{size[1]}")
     print(f"[comp] plate: {rel(bg_path)}")
     print(f"[comp] flat colour: {args.color}")
-    plate = compose.cover_fit(Image.open(bg_path).convert("RGB"), size, args.bg_crop)
+    plates = None
+    if args.track_bg:
+        from cleanplate import harmonize
+        frames_rgb = [load_frame(args.shot, int(p.stem)) for p in paths]
+        alphas_u8 = np.stack([np.asarray(Image.open(p).convert("RGBA"))[..., 3]
+                              for p in paths])
+        track = harmonize.track_translation(frames_rgb, alphas_u8)
+        plates = harmonize.panned_background(Image.open(bg_path).convert("RGB"), size,
+                                             track, args.bg_crop)
+        plate = plates[0]
+        print(f"[comp] background tracked: plate moves {track[:, 0].min():.0f}.."
+              f"{track[:, 0].max():.0f} px in x, {track[:, 1].min():.0f}.."
+              f"{track[:, 1].max():.0f} in y")
+    else:
+        plate = compose.cover_fit(Image.open(bg_path).convert("RGB"), size, args.bg_crop)
     if args.bg_crop:
         print(f"[comp] plate cropped from {args.bg_crop}")
+
+    hm = None
+    if not args.no_harmonize:
+        from cleanplate import harmonize
+        fg_all = [np.asarray(Image.open(p).convert("RGBA")) for p in paths]
+        hm = harmonize.estimate([a[..., :3] for a in fg_all],
+                                np.stack([a[..., 3] for a in fg_all]),
+                                plates if plates is not None else [plate] * len(paths),
+                                strength=args.harmonize_strength,
+                                mode=args.harmonize_mode)
+        print(f"[comp] harmonize {args.harmonize_mode} @{args.harmonize_strength}: "
+              f"gain {[round(g, 3) for g in hm.gain]} offset "
+              f"{[round(o, 1) for o in hm.offset]} grain +{hm.grain_sigma:.2f}")
     flat = compose.solid(size, compose.hex_rgb(args.color))
 
     dirs = {k: root / k for k in ("comp_solid", "comp_image", "_sbs")}
@@ -107,7 +143,9 @@ def main() -> None:
         arr = np.asarray(Image.open(p).convert("RGBA"))
         fg, a = arr[..., :3], arr[..., 3]
         Image.fromarray(compose.over(fg, a, flat)).save(dirs["comp_solid"] / f"{idx:05d}.png")
-        comp = compose.over(fg, a, plate)
+        bg_i = plates[idx] if plates is not None else plate
+        fg_i = harmonize.apply(fg, hm, a, seed=idx) if hm is not None else fg
+        comp = compose.over(fg_i, a, bg_i)
         Image.fromarray(comp).save(dirs["comp_image"] / f"{idx:05d}.png")
         strip = Image.new("RGB", (size[0] * 3, size[1]))
         strip.paste(label(Image.fromarray(load_frame(args.shot, idx)), "ORIGINAL"), (0, 0))

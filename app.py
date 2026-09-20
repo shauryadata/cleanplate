@@ -158,7 +158,13 @@ def render(st: dict, idx: int, mode: str, bg_choice: str, bg_colour: str,
         out = st["cleaned"][idx] if st.get("cleaned") is not None else rgb
     elif mode == "Comp":
         src = st["rgba"][idx][..., :3] if st.get("rgba") is not None else rgb
-        out = compose.over(src, a, background_plate(st, bg_choice, bg_colour, bg_image))
+        plate = background_plate(st, bg_choice, bg_colour, bg_image)
+        if st.get("harmonize", True) and bg_choice == "Image" and bg_image is not None:
+            from cleanplate import harmonize
+            hm = harmony_for(st, plate)
+            if hm is not None:
+                src = harmonize.apply(src, hm, a, seed=idx)
+        out = compose.over(src, a, plate)
     else:
         out = rgb
 
@@ -167,6 +173,27 @@ def render(st: dict, idx: int, mode: str, bg_choice: str, bg_colour: str,
         if e:
             out = viewer.draw_points(out, e.positive, e.negative)
     return out
+
+
+def harmony_for(st: dict, plate: np.ndarray):
+    """The shot's colour match to this plate, estimated once and cached.
+
+    Harmonize v0 (docs/DECISIONS.md D5): one gain and offset for the whole shot, full
+    match at strength 0.5, chosen at the review stop over a cast-only variant. Global
+    and static, so it cannot flicker; it does nothing about direction of light.
+    """
+    from cleanplate import harmonize
+    key = (plate.shape, int(plate[::37, ::37].sum()), st.get("shot"))
+    if st.get("_harmony_key") == key:
+        return st.get("_harmony")
+    alphas = active_alpha(st)
+    if alphas is None:
+        return None
+    frames = [ingest.load_frame(st["shot"], i) for i in range(0, len(alphas), 8)]
+    hm = harmonize.estimate(frames, alphas[::8], [plate] * len(frames),
+                            strength=0.5, mode="full", sample=1)
+    st["_harmony_key"], st["_harmony"] = key, hm
+    return hm
 
 
 def background_plate(st: dict, bg_choice: str, bg_colour: str, bg_image) -> np.ndarray:
@@ -768,6 +795,13 @@ def build() -> gr.Blocks:
                                     "show up instantly.</div>")
                         bg_image = gr.Image(label="Background plate", type="pil",
                                             height=170, buttons=["fullscreen"])
+                        harm_cb = gr.Checkbox(
+                            True, label="Match colour to the plate (harmonize v0)",
+                            info="One gain and offset for the whole shot, at half "
+                                 "strength, so it cannot flicker. Chosen by eye over a "
+                                 "cast-only variant. It does nothing about the "
+                                 "DIRECTION of the light: a subject lit from the wrong "
+                                 "side stays wrong. Image backdrops only.")
 
                     with gr.Tab("Remove"):
                         ok_rm, why_rm = remove.available()
@@ -842,6 +876,12 @@ def build() -> gr.Blocks:
                         prompt_md, view_mode])
         for comp in (frame_slider, view_mode, bg_choice, bg_colour, bg_image):
             comp.change(on_view_change, view_inputs, viewer_img, show_progress="hidden")
+
+        def on_harmonize(st, on, idx, mode, bgc, bgcol, bgimg):
+            st["harmonize"] = bool(on)
+            return st, render(st, idx, mode, bgc, bgcol, bgimg)
+        harm_cb.change(on_harmonize, [st, harm_cb, *ctx], [st, viewer_img],
+                       show_progress="hidden")
 
         viewer_img.select(on_click, [st, frame_slider, view_mode, click_mode,
                                      bg_choice, bg_colour, bg_image],
