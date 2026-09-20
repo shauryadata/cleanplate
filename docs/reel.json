@@ -26,7 +26,7 @@
       "type": "clip",
       "src": "outputs/_reel_src/double_role.mp4",
       "placeholder": "DOUBLE-ROLE SHOT\nshot on his phone, cut by this pipeline",
-      "seconds": 8.0,
+      "seconds": 6.0,
       "caption": "One actor. Two takes. One locked camera.",
       "vertical": true,
       "heading": "Double role"
@@ -34,7 +34,7 @@
     {
       "id": "title",
       "type": "card",
-      "seconds": 3.5,
+      "seconds": 2.5,
       "title": "CleanPlate",
       "body": "Rotoscoping, matting and object removal.\nEntirely on your own machine.",
       "vertical": true
@@ -45,7 +45,7 @@
       "shot": "walk",
       "alpha": "outputs/walk_v2/alpha",
       "comp": "outputs/walk_harmonized/comp_image",
-      "seconds": 10.0,
+      "seconds": 8.0,
       "caption": "One click on frame 1. A matte on every frame.",
       "vertical": true,
       "heading": "One click"
@@ -63,8 +63,8 @@
         880,
         560
       ],
-      "seconds": 8.0,
-      "caption": "Backlit hair, green-screen plate: default pass against the high-quality pass.",
+      "seconds": 6.5,
+      "caption": "Backlit hair: default pass against the high-quality pass.",
       "vertical": true,
       "heading": "Hair"
     },
@@ -72,7 +72,7 @@
       "id": "changes",
       "type": "still",
       "src": "docs/img/09_changes.png",
-      "seconds": 7.5,
+      "seconds": 5.0,
       "zoom": 1.08,
       "caption": "A fix at frame 67 can silently change frame 24. The app says so.",
       "vertical": false
@@ -81,8 +81,8 @@
       "id": "remove_lamppost",
       "type": "clip",
       "src": "outputs/_demos/A_walk_lamppost/before_after.mp4",
-      "seconds": 5.0,
-      "caption": "Removal: a cast-iron lamppost, and the railing behind it.",
+      "seconds": 4.0,
+      "caption": "Removal: a lamppost, and the railing behind it.",
       "vertical": true,
       "heading": "Remove anything"
     },
@@ -90,16 +90,16 @@
       "id": "remove_markers",
       "type": "clip",
       "src": "outputs/_reel_src/markers_zoom",
-      "seconds": 4.5,
-      "caption": "Tracking markers, found by a detector and painted out.",
-      "vertical": false,
+      "seconds": 3.5,
+      "caption": "Tracking markers, found and painted out.",
+      "vertical": true,
       "heading": "Clean the plate"
     },
     {
       "id": "remove_actor",
       "type": "clip",
       "src": "outputs/_demos/C_dialogue_one_actor/before_after.mp4",
-      "seconds": 5.5,
+      "seconds": 4.0,
       "caption": "One actor of two, with the other left alone.",
       "vertical": true,
       "heading": "Remove one of two"
@@ -107,7 +107,7 @@
     {
       "id": "rotobench",
       "type": "table",
-      "seconds": 9.0,
+      "seconds": 6.0,
       "title": "RotoBench",
       "body": "Scored against the Tears of Steel compositors' own keys.",
       "footer": "A matte that never moves is perfectly self-consistent, and wrong.",
@@ -116,7 +116,7 @@
     {
       "id": "end",
       "type": "card",
-      "seconds": 6.0,
+      "seconds": 5.0,
       "title": "github.com/shauryadata/cleanplate",
       "body": "MIT core. Runs locally: Apple Silicon, CUDA or CPU.",
       "credits": true,

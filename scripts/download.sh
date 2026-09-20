@@ -15,6 +15,24 @@ FOOTAGE_MIRROR="https://download.blender.org/demo/movies/ToS/tears_of_steel_1080
 
 SAM2_REPO="https://github.com/facebookresearch/sam2.git"
 SAM2_DIR="vendor/sam2"
+# Commits this project has actually been validated against. Cloning a moving default
+# branch means a rerun months later is a different program; every number in
+# docs/ROTOBENCH_RESULTS.md was produced with these. Override to track upstream.
+SAM2_PIN="${SAM2_PIN:-2b90b9f5ceec907a1c18123530e92e794ad901a4}"
+MATANYONE_PIN="${MATANYONE_PIN:-e5ddc534c1fff9bb9e54cf476095d29071b7cb4f}"
+PROPAINTER_PIN="${PROPAINTER_PIN:-e870e79321c31b733e2031af5aa2fb1fe3ac7eec}"
+
+# Check out a pinned commit if it is reachable; say so and carry on if it is not.
+pin_to() {
+  local dir="$1" pin="$2" name="$3"
+  local have; have=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo none)
+  case "$have" in "$pin"*) log "$name pinned at ${pin:0:8}"; return 0 ;; esac
+  if git -C "$dir" fetch --depth 1 origin "$pin" >/dev/null 2>&1; then
+    git -C "$dir" checkout -q FETCH_HEAD && log "$name checked out at ${pin:0:8}"
+  else
+    log "$name: pin ${pin:0:8} not fetchable, staying on ${have:0:8} (upstream default)"
+  fi
+}
 
 # SAM 2.1 checkpoints (2024-09-28 release). hiera_small is what CleanPlate uses today.
 CKPT_BASE="https://dl.fbaipublicfiles.com/segment_anything_2/092824"
@@ -53,6 +71,7 @@ fetch_sam2() {
   else
     log "cloning SAM 2"
     git clone --depth 1 "$SAM2_REPO" "$SAM2_DIR"
+    pin_to "$SAM2_DIR" "$SAM2_PIN" "SAM 2"
   fi
   # SAM 2's setup.py optionally builds a CUDA extension. Skip it on machines
   # without an NVIDIA toolchain (Apple Silicon, CPU-only) so the install succeeds.
@@ -84,6 +103,7 @@ fetch_matanyone() {
   else
     log "cloning MatAnyone"
     git clone --depth 1 "$MATANYONE_REPO" "$MATANYONE_DIR"
+    pin_to "$MATANYONE_DIR" "$MATANYONE_PIN" "MatAnyone"
     # 70 MB of demo videos and stills we never use
     rm -rf "$MATANYONE_DIR/inputs" "$MATANYONE_DIR/assets"
   fi
@@ -190,6 +210,21 @@ fetch_pro() {
   log "target links it back if present, and re-fetches it if not."
 }
 
+# The two Mars backgrounds: NASA/JPL, public domain (datasets/backgrounds/SOURCES.txt).
+# Committed because they are small, but re-fetchable so the provenance is executable.
+fetch_backgrounds() {
+  mkdir -p datasets/backgrounds
+  local pano=datasets/backgrounds/mars_curiosity_360_pano.jpg
+  if [ -s "$pano" ]; then
+    log "Mars panorama already present"
+  else
+    log "downloading the NASA Curiosity panorama (public domain, ~0.3 MB)"
+    curl -fL --retry 3 -o "$pano" \
+      "https://upload.wikimedia.org/wikipedia/commons/7/76/Mars_curiousity_360_panorama_may_4_2020.jpg"
+  fi
+  "$PY" scripts/_crop_mars.py
+}
+
 case "${1:-all}" in
   footage)     fetch_footage ;;
   sam2)        fetch_sam2 ;;
@@ -200,7 +235,8 @@ case "${1:-all}" in
   all)         fetch_footage; fetch_sam2; fetch_checkpoints; fetch_matanyone; fetch_propainter ;;
   truth)       fetch_footage; fetch_datasets ;;
   pro)         fetch_pro ;;
-  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|pro|all]" >&2; exit 2 ;;
+  backgrounds) fetch_backgrounds ;;
+  *)           echo "usage: $0 [footage|sam2|checkpoints|matanyone|propainter|datasets|truth|pro|backgrounds|all]" >&2; exit 2 ;;
 esac
 
 log "done."

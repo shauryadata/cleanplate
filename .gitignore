@@ -37,6 +37,10 @@ datasets/*
 !datasets/backgrounds/
 datasets/backgrounds/*
 !datasets/backgrounds/SOURCES.txt
+# NASA/JPL public domain, 0.6 MB for the pair: committed so the Colab notebook and the
+# reel's Mars comp work from a bare clone. download.sh backgrounds re-fetches them.
+!datasets/backgrounds/mars_clean.jpg
+!datasets/backgrounds/mars_curiosity_360_pano.jpg
 
 # Truth clips: the pixels are derived, the recipes are not. Recipes are committed so
 # every clip regenerates bit for bit via scripts/build_truth.py.
