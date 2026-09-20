@@ -198,3 +198,20 @@ Test footage used for development and the Task 1 demo:
 Any background images used in comp previews are recorded in
 `outputs/<shot>/backgrounds/SOURCES.txt` with their origin and license at the time they
 are fetched. Only public-domain or explicitly free-to-use images are used.
+
+## Reel assets
+
+### Music — "DreamScape" by HoliznaCC0
+- Source: https://archive.org/details/holizna-cc-0-cosmic-waves
+- **License: CC0 1.0 Universal** (public domain dedication), verified from the item's
+  `licenseurl` metadata on archive.org: `creativecommons.org/publicdomain/zero/1.0/`.
+  CC0 requires no attribution; the reel credits it anyway.
+- Used: 70 seconds from 1:30, faded, at half volume, committed as
+  `assets/reel_music.mp3` (1.6 MB) so the reel re-renders from the repo.
+
+### Font — DejaVu Sans
+- Ships with matplotlib (`mpl-data/fonts/ttf`), already a dependency; nothing extra
+  downloaded.
+- **License: Bitstream Vera Fonts Copyright** (free to use, redistribute and modify;
+  DejaVu changes are public domain), verified from `LICENSE_DEJAVU` in that directory.
+- Used for every title, caption and card in the reel.

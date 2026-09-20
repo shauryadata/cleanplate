@@ -1,0 +1,126 @@
+{
+  "fps": 24,
+  "size": [
+    1920,
+    1080
+  ],
+  "vertical_size": [
+    1080,
+    1920
+  ],
+  "bg": "#0b0d12",
+  "fg": "#eef1f6",
+  "dim": "#8b93a7",
+  "accent": "#3ddc84",
+  "music": {
+    "file": "assets/reel_music.mp3",
+    "title": "DreamScape (excerpt, 90s-160s)",
+    "artist": "HoliznaCC0",
+    "license": "CC0 1.0 Universal (public domain dedication)",
+    "source": "https://archive.org/details/holizna-cc-0-cosmic-waves"
+  },
+  "credit": "Tears of Steel footage: (CC) Blender Foundation | mango.blender.org",
+  "segments": [
+    {
+      "id": "cold_open",
+      "type": "clip",
+      "src": "outputs/_reel_src/double_role.mp4",
+      "placeholder": "DOUBLE-ROLE SHOT\nshot on his phone, cut by this pipeline",
+      "seconds": 8.0,
+      "caption": "One actor. Two takes. One locked camera.",
+      "vertical": true,
+      "heading": "Double role"
+    },
+    {
+      "id": "title",
+      "type": "card",
+      "seconds": 3.5,
+      "title": "CleanPlate",
+      "body": "Rotoscoping, matting and object removal.\nEntirely on your own machine.",
+      "vertical": true
+    },
+    {
+      "id": "click_to_matte",
+      "type": "reveal",
+      "shot": "walk",
+      "alpha": "outputs/walk_v2/alpha",
+      "comp": "outputs/walk_harmonized/comp_image",
+      "seconds": 10.0,
+      "caption": "One click on frame 1. A matte on every frame.",
+      "vertical": true,
+      "heading": "One click"
+    },
+    {
+      "id": "hair_hq",
+      "type": "wipe",
+      "a": "outputs/_reel_src/hair_ab/a",
+      "b": "outputs/_reel_src/hair_ab/b",
+      "a_label": "default pass",
+      "b_label": "high-quality hair pass",
+      "crop": [
+        0,
+        0,
+        880,
+        560
+      ],
+      "seconds": 8.0,
+      "caption": "Backlit hair, green-screen plate: default pass against the high-quality pass.",
+      "vertical": true,
+      "heading": "Hair"
+    },
+    {
+      "id": "changes",
+      "type": "still",
+      "src": "docs/img/09_changes.png",
+      "seconds": 7.5,
+      "zoom": 1.08,
+      "caption": "A fix at frame 67 can silently change frame 24. The app says so.",
+      "vertical": false
+    },
+    {
+      "id": "remove_lamppost",
+      "type": "clip",
+      "src": "outputs/_demos/A_walk_lamppost/before_after.mp4",
+      "seconds": 5.0,
+      "caption": "Removal: a cast-iron lamppost, and the railing behind it.",
+      "vertical": true,
+      "heading": "Remove anything"
+    },
+    {
+      "id": "remove_markers",
+      "type": "clip",
+      "src": "outputs/_reel_src/markers_zoom",
+      "seconds": 4.5,
+      "caption": "Tracking markers, found by a detector and painted out.",
+      "vertical": false,
+      "heading": "Clean the plate"
+    },
+    {
+      "id": "remove_actor",
+      "type": "clip",
+      "src": "outputs/_demos/C_dialogue_one_actor/before_after.mp4",
+      "seconds": 5.5,
+      "caption": "One actor of two, with the other left alone.",
+      "vertical": true,
+      "heading": "Remove one of two"
+    },
+    {
+      "id": "rotobench",
+      "type": "table",
+      "seconds": 9.0,
+      "title": "RotoBench",
+      "body": "Scored against the Tears of Steel compositors' own keys.",
+      "footer": "A matte that never moves is perfectly self-consistent, and wrong.",
+      "vertical": true
+    },
+    {
+      "id": "end",
+      "type": "card",
+      "seconds": 6.0,
+      "title": "github.com/shauryadata/cleanplate",
+      "body": "MIT core. Runs locally: Apple Silicon, CUDA or CPU.",
+      "credits": true,
+      "vertical": true
+    }
+  ]
+}
