@@ -56,9 +56,52 @@ and made no progress in forty minutes. `cleanplate/memguard.py` now aborts this 
 run instead of thrashing. Buying resolution only where it matters — the hair crop-and-zoom
 — is the practical workaround and is what ships.
 
-## Hair strand transparency cannot currently be scored
+## Hair strand transparency is better referenced now, but still keyer-derived
 
-Both ground-truth tiers are keyer-derived, so neither contains much interior strand
-transparency to recover. Until there is a reference that was never keyed (CG hair
-rendered with true alpha, or a captured plate with a known matte), "recover hair
-transparency" is not a measurable objective. See docs/TASK4_REPORT.md.
+**Updated in Task 6.** Both earlier tiers were keyed by me, so neither held much strand
+transparency to recover. RotoBench Tier P uses the compositing team's own keys, which on
+the same frames carry **1.42% soft pixels against our keyer's 0.60%**, and edges 5.10 px
+deep against 3.61. That is a materially better reference — and it ranks the seven methods
+differently enough (Spearman 0.75 against our key) that the in-house key should no longer
+be used to decide anything.
+
+It is still a key. A reference that was never keyed — CG hair rendered with true alpha,
+or a captured plate with a known matte — remains the thing that would settle interior
+strand transparency. See docs/ROTOBENCH.md.
+
+## The coverage bug cannot be fixed at the matting stage
+
+**Measured in Task 6** against professional truth, over seven clips. Splitting the
+pixels the default matte misses inside the reference's opaque core:
+
+- **85.8%** are regions the segmentation never selected on any nearby frame — a whole
+  jacket, a bank of monitors. A trimap solver has no confident foreground to anchor to
+  there and answers background.
+- **14.2%** are intermittent, the class the user reported ("part of the face drops out").
+
+Two repairs were built and scored against a rule fixed before they ran: a wide unknown
+band over dropout-prone regions merged with max() (`cover_960`), and a wide band
+everywhere (`cover2_960`). They recover **0.4%** and **1.9%** of the missing coverage and
+cost +7.0% and +29.8% of band MAD. **Neither was integrated**; both stay in the standings
+as losers. See docs/ROTOBENCH_RESULTS.md.
+
+The lever is on the other side. On P02, where the oracle prompt put both clicks on skin
+and SAM 2 dropped the actor's jacket for 96 frames, **one** extra click took whole-frame
+MAD from 129.8 to 4.8.
+
+## The hair-zoom pass does not fit on wide subjects
+
+The HQ pass re-mattes the head box at 2x, so its cost scales with that box. In RotoBench
+it completed at 1.0–1.1 MP of zoomed area and was killed by the memory guard twice at
+~1.9 MP (a two-person shot whose "head box" spans the frame). It could not run on five
+of twelve clips. The app now refuses it above 1.2 MP and says so rather than thrashing;
+tiling the pass would remove the limit.
+
+## GPU numerics moved under the code
+
+After the macOS 27.0 (26A428) update, HEAD itself — unmodified — no longer reproduces
+the Task 2 regression reference bit for bit: binary masks differ at min per-frame IoU
+0.99998, with every recomputed metric identical. `scripts/regression_check.py` gained an
+EQUIVALENT verdict for exactly that signature. To certify a code change, A/B the working
+tree against HEAD on the same machine and require bit-identity; Task 6 did that for the
+multi-object tracker (0 differing pixels).

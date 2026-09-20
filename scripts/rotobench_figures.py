@@ -85,7 +85,7 @@ def _err(pred: np.ndarray, gt: np.ndarray) -> np.ndarray:
     return out
 
 
-def stills(clips=("P01_08_3a", "P03_04_5k", "P02_04_1b"),
+def stills(clips=("P01_08_3a", "P05_09_1a", "P06_08_4a"),
            methods=("baseline_960", "hairzoom2_960"), frame: str = "mid") -> None:
     """Professional key against our mattes. The MIDDLE frame of each clip, by rule -
     not the frame where a method looks best."""
@@ -109,6 +109,55 @@ def stills(clips=("P01_08_3a", "P03_04_5k", "P02_04_1b"),
     w = max(r.shape[1] for r in rows)
     rows = [np.pad(r, ((0, 4), (0, w - r.shape[1]), (0, 0))) for r in rows]
     out = IMG / "rotobench_stills.jpg"
+    Image.fromarray(np.vstack(rows)).save(out, quality=88)
+    print(f"[fig] {rel(out)}")
+
+
+def dropout(base: str = "hairzoom2_960", repair: str = "cover_960", n: int = 2) -> None:
+    """The frames where the base matte lost coverage, before and after the repair.
+
+    The frames are chosen by the worst base dropout, not by where the repair looks
+    good."""
+    import cv2
+    from cleanplate import bench as B
+    cands = []
+    for c in B.clips("P"):
+        if not (OUT / repair / c.name).is_dir():
+            continue
+        gt = B.load_alpha(ROOT / "truth" / c.name / "alpha")
+        bp = _load(OUT / base / c.name)
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        for i, (g, b) in enumerate(zip(gt, bp)):
+            core = cv2.erode((g >= 250).astype(np.uint8), k) > 0
+            cands.append((int((core & (b < 128)).sum()), c.name, i))
+    if not cands:
+        print("[fig] no repair output yet"); return
+    best, rows = sorted(cands, reverse=True), []
+    picked, seen = [], set()
+    for px, cn, i in best:                       # one frame per clip, worst first
+        if cn in seen:
+            continue
+        seen.add(cn); picked.append((px, cn, i))
+        if len(picked) >= n:
+            break
+    for px, cn, i in picked:
+        gt = np.asarray(Image.open(ROOT / "truth" / cn / "alpha" / f"{i:05d}.png"))
+        f = np.asarray(Image.open(ROOT / "truth" / cn / "frames" / f"{i:05d}.jpg").convert("RGB"))
+        bp = np.asarray(Image.open(OUT / base / cn / f"{i:05d}.png"))
+        rp = np.asarray(Image.open(OUT / repair / cn / f"{i:05d}.png"))
+        ys, xs = np.nonzero((gt >= 250) & (bp < 128))
+        cy, cx = int(ys.mean()), int(xs.mean())
+        h = 260
+        sl = (slice(max(0, cy - h), max(0, cy - h) + 2 * h),
+              slice(max(0, cx - h), max(0, cx - h) + 2 * h))
+        tiles = [label(f[sl], f"{cn} frame {i}: plate"),
+                 label(np.dstack([gt[sl]] * 3), "professional key"),
+                 label(np.dstack([bp[sl]] * 3), f"{base} ({px:,} px dropped)"),
+                 label(np.dstack([rp[sl]] * 3), repair),
+                 label(_err(bp, gt)[sl], "before: red = missing"),
+                 label(_err(rp, gt)[sl], "after")]
+        rows.append(np.hstack(tiles))
+    out = IMG / "rotobench_dropout.jpg"
     Image.fromarray(np.vstack(rows)).save(out, quality=88)
     print(f"[fig] {rel(out)}")
 

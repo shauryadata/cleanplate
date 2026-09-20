@@ -42,7 +42,7 @@ def results() -> dict:
         if not d.is_dir():
             continue
         for j in d.glob("P*.json"):
-            if "__" in j.stem or j.stem.endswith("_ABORTED"):
+            if "__" in j.stem or j.stem.endswith(("_ABORTED", "_TOOBIG")):
                 continue
             out.setdefault(m, {})[j.stem] = json.loads(j.read_text())
     return out
@@ -64,6 +64,27 @@ def pred(m: str, clip: str) -> np.ndarray:
 
 def truth(clip: str, sub: str = "alpha") -> np.ndarray:
     return bench.load_alpha(ROOT / "truth" / clip / sub)
+
+
+def paired(R: dict, methods: list[str], clips: list[str]) -> list[str]:
+    """Clips where EVERY listed method ran.
+
+    Forced by the zoom size cap: hairzoom/hairzoom2 could not run on 5 of the 12 clips
+    (their zoom region does not fit in 18 GB), and a method that skips the hard clips
+    would otherwise look better than one that did not. The pre-registered thresholds
+    are unchanged; only the clip set they are computed over is made common.
+    """
+    return [c for c in clips if all(c in R.get(m, {}) for m in methods)]
+
+
+def not_run(R: dict) -> list[dict]:
+    rows = []
+    for d in sorted(OUT.glob("*/")):
+        for j in sorted(d.glob("*_TOOBIG.json")) + sorted(d.glob("*_ABORTED.json")):
+            r = json.loads(j.read_text())
+            rows.append({"method": r["method"], "clip": r["clip"],
+                         "why": r.get("NOT_RUN") or r.get("ABORTED")})
+    return rows
 
 
 def mean(xs):
@@ -106,7 +127,8 @@ def standings(R: dict, clips: list[str], methods: list[str]) -> list[dict]:
 
 
 def standings_md(rows: list[dict]) -> str:
-    cols = [("mean rank", "mean_rank", "{:.2f}", "lower"),
+    cols = [("clips", "clips", "{:.0f}", None),
+            ("mean rank", "mean_rank", "{:.2f}", "lower"),
             ("band MAD", "band_MAD", "{:.1f}", "lower"),
             ("band MAD median", "band_MAD_median", "{:.1f}", "lower"),
             ("hair MAD", "hair_MAD", "{:.2f}", "lower"),
@@ -121,7 +143,8 @@ def standings_md(rows: list[dict]) -> str:
         cells = []
         for _, k, f, better in cols:
             vals = [x[k] for x in rows if np.isfinite(x[k])]
-            best = (min(vals) if better == "lower" else max(vals)) if vals else None
+            best = ((min(vals) if better == "lower" else max(vals))
+                    if vals and better else None)
             v = r[k]
             s = f.format(v) if np.isfinite(v) else "-"
             cells.append(f"**{s}**" if best is not None and np.isfinite(v)
@@ -144,7 +167,11 @@ def spearman(x, y) -> float:
 
 def ledger(R: dict, G: dict) -> list[dict]:
     core = G["core"]
-    S = {r["method"]: r for r in standings(R, core, METHODS)}
+    core_all = paired(R, METHODS, core)          # every method ran here
+    S = {r["method"]: r for r in standings(R, core_all, METHODS)}
+    note_paired = (f" (on the {len(core_all)} of {len(core)} core clips where every "
+                   f"method ran; the zoom cap excluded the rest)"
+                   if len(core_all) < len(core) else "")
     L = []
 
     def add(cid, src, claim, test, measured, verdict, note=""):
@@ -154,11 +181,22 @@ def ledger(R: dict, G: dict) -> list[dict]:
     # C1 - the 2 px edge-depth claim: the REFERENCE's own depth
     d_truth = {c: soft_depth_at_mid(truth(c), truth(c)) for c in core}
     med = float(np.nanmedian(list(d_truth.values())))
+    # cross-check the measure itself on the clips Task 4 measured, so a reversal cannot
+    # be an artefact of a differently-defined soft depth
+    old_refs = []
+    for nm, sub in (("B1 (Tier B)", "B1_tos_greenscreen_hair"), ("A3 (Tier A)", "A3_longhair_canal")):
+        d = ROOT / "truth" / sub / "alpha"
+        if d.is_dir():
+            a = bench.load_alpha(d)
+            old_refs.append(f"{nm} {accuracy.soft_depth(a[48], bench.hair_box(a)):.2f} px")
     add("C1", "Task 4", "Reference hair edges are about 2 px deep (median 2.0-2.8 px on "
         "Tier A/B).", "Median soft depth of the professional key in the hair box, middle "
         "frame, core clips. HOLDS if <= 3.0 px, REVERSES if >= 4.0 px.",
         f"{med:.2f} px (per clip: " + ", ".join(f"{c[:3]} {v:.1f}" for c, v in
-                                                d_truth.items()) + ")",
+                                                d_truth.items()) + ")"
+        + (". Same measure on Task 4's own clips reproduces its numbers ("
+           + ", ".join(old_refs) + " against 2.8 and 2.2 reported), so this is the "
+           "reference that changed, not the measure" if old_refs else ""),
         "HOLDS" if med <= 3.0 else "REVERSES" if med >= 4.0 else "PARTIAL")
 
     # C2 - baseline too soft, not too hard
@@ -196,31 +234,33 @@ def ledger(R: dict, G: dict) -> list[dict]:
     # C4 - zoom + MA2 beats zoom + v1 on >= 4 of 5, cheaper
     if all(m in R for m in ("hairzoom2_960", "hairzoom_960")):
         keys = ["MAD", "MSE", "Grad", "dtSSD", "BF"]
+        pc = paired(R, ["hairzoom2_960", "hairzoom_960"], core)
         wins = 0
         for k in keys:
-            a = mean(R["hairzoom2_960"][c]["hair_region"][k] for c in core if c in R["hairzoom2_960"])
-            b = mean(R["hairzoom_960"][c]["hair_region"][k] for c in core if c in R["hairzoom_960"])
+            a = mean(R["hairzoom2_960"][c]["hair_region"][k] for c in pc)
+            b = mean(R["hairzoom_960"][c]["hair_region"][k] for c in pc)
             wins += (a > b) if k == "BF" else (a < b)
         cheaper = S["hairzoom2_960"]["s_per_frame"] < S["hairzoom_960"]["s_per_frame"]
         add("C4", "Task 4", "Zoom with MatAnyone 2 beats zoom with v1 on 4 of 5 hair "
             "metrics, and costs less.", "Hair-region means over core; count of metrics "
             "won, and s/frame. HOLDS if >= 4 wins and cheaper.",
-            f"{wins}/5 won; {S['hairzoom2_960']['s_per_frame']:.2f} vs "
+            f"{wins}/5 won on {len(pc)} clips; {S['hairzoom2_960']['s_per_frame']:.2f} vs "
             f"{S['hairzoom_960']['s_per_frame']:.2f} s/frame",
             "HOLDS" if wins >= 4 and cheaper else "PARTIAL" if wins >= 3 else "REVERSES")
 
     # C5 - MatAnyone 2 beats v1 on every whole-frame metric (the app default)
     if all(m in R for m in ("matanyone2_960", "baseline_960")):
         keys = ["MAD", "MSE", "Grad", "dtSSD", "BF"]
+        pc5 = paired(R, ["matanyone2_960", "baseline_960"], core)
         wins = 0
         for k in keys:
-            a = mean(R["matanyone2_960"][c]["whole_frame"][k] for c in core if c in R["matanyone2_960"])
-            b = mean(R["baseline_960"][c]["whole_frame"][k] for c in core if c in R["baseline_960"])
+            a = mean(R["matanyone2_960"][c]["whole_frame"][k] for c in pc5)
+            b = mean(R["baseline_960"][c]["whole_frame"][k] for c in pc5)
             wins += (a > b) if k == "BF" else (a < b)
         add("C5", "Task 4 (app default)", "MatAnyone 2 beats v1 on every whole-frame "
             "metric at essentially the same cost - the reason it is the app default.",
             "Whole-frame means over core. HOLDS if 5/5, PARTIAL if 3-4, REVERSES if <= 2.",
-            f"{wins}/5 won", "HOLDS" if wins == 5 else "PARTIAL" if wins >= 3 else "REVERSES")
+            f"{wins}/5 won on {len(pc5)} clips", "HOLDS" if wins == 5 else "PARTIAL" if wins >= 3 else "REVERSES")
 
     # C6 - guided filter worse than nothing on hair
     if all(m in S for m in ("guided_960", "baseline_960")):
@@ -405,14 +445,22 @@ def dropout_breakdown(R: dict, G: dict) -> dict:
                 continue
             gt, base, x = truth(c), pred(COVER_BASE, c), pred(m, c)
             d_n = rec = fal = asum = 0.0
-            for g, b, y in zip(gt, base, x):
+            inter_n = inter_rec = 0.0        # analysis only - not part of the rule
+            bh = base >= 128
+            for t, (g, b, y) in enumerate(zip(gt, base, x)):
                 core = cv2.erode((g >= 250).astype(np.uint8), k) > 0
                 clear = cv2.erode((g <= 5).astype(np.uint8), k) > 0
                 D = core & (b < 128)
                 d_n += D.sum(); rec += (D & (y >= 128)).sum(); asum += y[D].sum() / 255.0
                 fal += (clear & (y >= 128) & (b < 128)).sum()
+                # intermittent: the base had this pixel within +/-6 frames (the user's
+                # jaw); otherwise never segmented (a prompt / granularity failure)
+                near = bh[max(0, t - 6):t + 7].any(axis=0)
+                I = D & near
+                inter_n += I.sum(); inter_rec += (I & (y >= 128)).sum()
             per[c] = {"dropout_px": int(d_n), "recovered_px": int(rec),
-                      "false_px_added": int(fal)}
+                      "false_px_added": int(fal), "intermittent_px": int(inter_n),
+                      "intermittent_recovered_px": int(inter_rec)}
             tot_d += d_n; tot_rec += rec; tot_false += fal; tot_alpha += asum
         df_b = sum(R[COVER_BASE][c]["coverage"]["dropout_frames"] for c in per)
         df_m = sum(R[m][c]["coverage"]["dropout_frames"] for c in per)
@@ -434,10 +482,96 @@ def dropout_breakdown(R: dict, G: dict) -> dict:
             "core band MAD worse by <= 2%": res["core_band_mad_change_pct"] <= RULE["core_band_mad_worse_pct"],
             "false fill <= 10% of recovered": (tot_false <= RULE["false_per_recovered_max"] * tot_rec)
                                               if tot_rec else False}
+        ii = sum(v["intermittent_px"] for v in per.values())
+        ir = sum(v["intermittent_recovered_px"] for v in per.values())
+        res["intermittent_share"] = ii / tot_d if tot_d else float("nan")
+        res["intermittent_recovered_frac"] = ir / ii if ii else float("nan")
+        res["persistent_recovered_frac"] = ((tot_rec - ir) / (tot_d - ii)
+                                            if tot_d - ii else float("nan"))
         res["checks"] = checks
         res["integrate"] = all(checks.values())
         out[m] = res
     return out
+
+
+# ------------------------------------------------------------------ public doc
+def fill(doc: str, key: str, body: str) -> str:
+    """Replace the block after <!-- RESULTS:key --> up to <!-- /RESULTS:key -->."""
+    a, b = f"<!-- RESULTS:{key} -->", f"<!-- /RESULTS:{key} -->"
+    block = f"{a}\n{body}\n{b}"
+    if a in doc and b in doc:
+        return doc[:doc.index(a)] + block + doc[doc.index(b) + len(b):]
+    return doc.replace(a, block)
+
+
+def clip_table() -> str:
+    out = []
+    for c in bench.clips("P"):
+        rec = json.loads((ROOT / "truth" / c.name / "recipe.json").read_text())
+        w = rec["window"]
+        out.append(f"| {c.name} | {rec['shot']} | {w[1] - w[0] + 1} | {rec['group']} | "
+                   + ", ".join(a for a in rec["axes"] if not a.startswith("stress")) + " |")
+    return "\n".join(out)
+
+
+def selfcheck_table(R: dict, G: dict) -> str:
+    sc = self_consistency(R, G["core"])
+    if not sc:
+        return "_not computed_"
+    core_all = paired(R, METHODS, G["core"])
+    S = {r["method"]: r for r in standings(R, core_all, METHODS)}
+    rows = [(m, sc[m]["iou_consecutive"], S[m]["band_MAD"]) for m in METHODS
+            if m in sc and m in S]
+    by_self = {m: i for i, (m, _, _) in enumerate(sorted(rows, key=lambda r: -r[1]), 1)}
+    by_truth = {m: i for i, (m, _, _) in enumerate(sorted(rows, key=lambda r: r[2]), 1)}
+    out = ["## Why self-consistency is not accuracy", "",
+           "Stability metrics - does the matte boil? - are what you can measure without a "
+           "reference, and they are what CleanPlate itself reported until Task 4. This is "
+           "the table that says why they are not enough. The frozen control is the best "
+           "method's first frame repeated for the whole clip: as self-consistent as a "
+           "matte can possibly be, and wrong from the second frame on.", "",
+           "| Method | consecutive-frame IoU | rank by self-consistency | band MAD vs the "
+           "key | rank by truth |", "|---|---|---|---|---|"]
+    for m, iou, bm in sorted(rows, key=lambda r: -r[1]):
+        out.append(f"| {LABEL.get(m, m)} | {iou:.4f} | {by_self[m]} | {bm:.1f} | "
+                   f"{by_truth[m]} |")
+    if "frozen" in sc:
+        f = sc["frozen"]
+        out.append(f"| **frozen control** (best method, frame 0 repeated) | "
+                   f"**{f['iou_consecutive']:.4f}** | **1** | {f.get('band_MAD', float('nan')):.1f} "
+                   f"| last |")
+    rho = spearman([r[1] for r in rows], [-r[2] for r in rows])
+    out += ["", f"Spearman correlation between the two rankings: **{rho:+.2f}**."]
+    return "\n".join(out)
+
+
+def public_doc(R: dict, G: dict, L: list[dict]) -> None:
+    f = ROOT / "docs" / "ROTOBENCH.md"
+    if not f.exists():
+        return
+    doc = f.read_text()
+    doc = fill(doc, "cliptable", clip_table())
+    doc = fill(doc, "selfcheck", selfcheck_table(R, G))
+    core_all = paired(R, METHODS, G["core"])
+    st = ["## Standings", "",
+          f"Core clips where every method ran ({len(core_all)} of {len(G['core'])}; the "
+          "zoom size cap excluded the rest - see the results page). Ranked by mean rank "
+          "of band MAD across clips, so no single clip decides the order.", "",
+          standings_md(standings(R, core_all, METHODS + [m for m in COVER if m in R])), "",
+          "Per-group tables, per-clip numbers and the cost of every method: "
+          "[ROTOBENCH_RESULTS.md](ROTOBENCH_RESULTS.md)."]
+    doc = fill(doc, "standings", "\n".join(st))
+    led = ["## What changed our minds", "",
+           "Every conclusion this project has published to itself, re-tested against the "
+           "professional key. Verdict thresholds were committed before any result was "
+           "read.", "", "| # | Claim | Verdict |", "|---|---|---|"]
+    led += [f"| {c['id']} | {c['claim']} | **{c['verdict']}** |" for c in L]
+    led += ["", "The evidence for each: [ROTOBENCH_RESULTS.md](ROTOBENCH_RESULTS.md)."]
+    doc = fill(doc, "ledger", "\n".join(led))
+    secs = sum(r["seconds_total"] for m in R for r in R[m].values())
+    doc = fill(doc, "runtime", f"{secs / 3600:.1f} hours of method time plus scoring")
+    f.write_text(doc)
+    print(f"[report] -> {rel(f)}")
 
 
 def main() -> None:
@@ -456,6 +590,17 @@ def main() -> None:
         md.append(f"| {c['id']} | {c['source']} | {c['claim']} | {c['test']} | "
                   f"{c['measured']}{(' ' + c['note']) if c['note'] else ''} | "
                   f"**{c['verdict']}** |")
+    nr = not_run(R)
+    if nr:
+        md += ["", "## Jobs that did not run", "",
+               "| Method | Clip | Why |", "|---|---|---|"]
+        md += [f"| {r['method']} | {r['clip']} | {r['why']} |" for r in nr]
+        md += ["", "The zoom methods re-matte the head box at native resolution, so "
+               "their cost scales with that box. Two memory aborts on P03 stopped the "
+               "first run; the cap that followed keeps them off the five clips whose "
+               "zoom region exceeds 0.30 MP. Claims that compare them are judged only "
+               "on clips where every compared method ran.", ""]
+
     DB = dropout_breakdown(R, G)
     if DB:
         md += ["", "## Checkpoint 4 - the coverage repair", "",
@@ -474,6 +619,7 @@ def main() -> None:
         (OUT / "dropout_breakdown.json").write_text(json.dumps(DB, indent=2, default=float))
     (ROOT / "docs" / "ROTOBENCH_RESULTS.md").write_text("\n".join(md) + "\n")
     (OUT / "ledger.json").write_text(json.dumps(L, indent=2))
+    public_doc(R, G, L)
     print("\n".join(md))
 
 

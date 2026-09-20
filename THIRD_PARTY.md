@@ -161,7 +161,24 @@ license; nothing here is relicensed by inclusion.
   mango.blender.org."
 - Used: shot `08_3a`, 96 frames of `linear_hd` (1920x1012 half-float OpenEXR) — the
   same actor as our `hair` shot, on a green screen, for the Tier B keyed reference.
-- Not committed; `scripts/download.sh datasets` re-fetches it.
+  From Task 6 also the plate windows of the twelve RotoBench Tier P clips (the frames
+  each professional key was pulled from; see `truth/P*/recipe.json`).
+- Not committed; `scripts/download.sh datasets` and `scripts/download.sh pro` re-fetch.
+
+### Tears of Steel cleaned plates and mattes — RotoBench Tier P truth
+- Source: https://media.xiph.org/tearsofsteel/tearsofsteel-cleaned-exr/
+- **License: Creative Commons Attribution 3.0**, verified from that directory's own
+  `README.txt` (2026-09-19): "All of the files may be reused and redistributed under
+  the Creative Commons Attribution 3.0 license." Required attribution:
+  **(CC) Blender Foundation | mango.blender.org**. Logos and trademarks are excluded
+  from the licence; none are used.
+- What it is, per the README: "cleaned plates and mattes used as input to the
+  compositing pipeline". For character-key shots the frames are the despilled
+  foreground premultiplied over black with the compositor's matte in a fourth channel;
+  that channel is RotoBench's Tier P reference. A professional key, still a key.
+- Used: the committed windows of 12 shots (08_3a, 04_1b, 04_5k, 09_1a, 08_4a, 04_3d,
+  04_5n, 07_1c, 04_5g, 04_3b, 07_3c, 07_3b), 4K keys area-downscaled to 1920x1012.
+- Not committed (about 15 GB of EXR); `scripts/download.sh pro` re-fetches and rebuilds.
 
 ## Footage
 

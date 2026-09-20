@@ -47,10 +47,19 @@ NEAR_CLICK_PX = 12            # warn when a new click lands this close to an exi
 # pass over the head, which won the hair region outright.
 DEFAULT_REFINE = "matanyone2"
 HQ = {"label": "hair crop-and-zoom (2x) + MatAnyone 2",
-      "gain": "hair-region MAD 10.14 -> 6.33 (-37.6%) on the Task 4 truth set; "
-              "-10.6% on the one clip with reference alpha for a real backlit head",
-      "cost": "about +0.07 s/frame at 960 on the hair shot; 0.56 vs 0.20 s/frame "
-              "averaged over the Task 4 truth clips"}
+      # Re-measured in Task 6 against the Tears of Steel compositors' own keys
+      # (RotoBench Tier P), which replaced the in-house keyed reference Task 4 used.
+      # The numbers moved: still the best matte overall, by less than Task 4 thought.
+      "gain": "best of the seven methods on professional truth (mean rank 1.20, band "
+              "MAD 151.4); hair-region MAD 21.80 -> 15.10 (-30.7%) against MatAnyone v1. "
+              "Task 4's -37.6% was measured against a reference keyed in-house",
+      "cost": "0.49 vs 0.22 s/frame over the Tier P core clips. Skipped automatically "
+              "when the head region is too large to re-matte in memory"}
+# The zoom pass re-mattes the head box at 2x, so its cost scales with that box. In
+# RotoBench it completed at 1.0-1.1 MP of zoomed area and was killed by the memory
+# guard at ~1.9 MP (twice, on a wide two-person shot). The app refuses rather than
+# thrashes, and says so.
+HQ_ZOOMED_MP_CAP = 1.2
 VIEW_MODES = ["Plate", "Matte overlay", "Matte", "RGBA on checkerboard", "Comp",
               "Removal hole", "Cleaned plate"]
 THEME = gr.themes.Base(primary_hue="emerald", neutral_hue="slate")
@@ -431,10 +440,21 @@ def run_refine(st: dict, warmup, dilate, erode, hq, idx, mode, bgc, bgcol, bgimg
         raise gr.Error(str(e))
     wall = time.perf_counter() - t0
 
+    hq_skipped = None
     if hq:
-        progress(0.0, desc="high quality: re-matting the head at 2x")
         from cleanplate import methods as _m
         from cleanplate.ingest import resolve_frames_dir
+        l, t_, r, b = _m._hair_box_from_alpha(alphas)
+        zoomed_mp = (r - l) * (b - t_) * 4 / 1e6          # zoom 2x -> 4x the area
+        if zoomed_mp > HQ_ZOOMED_MP_CAP:
+            hq_skipped = (f"High-quality pass skipped: the subject's head region would "
+                          f"be {zoomed_mp:.1f} MP at 2x, over the {HQ_ZOOMED_MP_CAP} MP "
+                          f"limit this machine can matte without swapping. Measured in "
+                          f"RotoBench: it completes near 1.0 MP and is killed near 1.9. "
+                          f"The matte below is the standard pass.")
+            hq = False
+    if hq:
+        progress(0.0, desc="high quality: re-matting the head at 2x")
         try:
             alphas, zstats = _m.refine_hair_zoom(
                 resolve_frames_dir(st["shot"]), alphas, model=model, progress=cb)
@@ -458,6 +478,8 @@ def run_refine(st: dict, warmup, dilate, erode, hq, idx, mode, bgc, bgcol, bgimg
            f"`{stats['device']}`. Soft pixels: "
            f"{100 * stats['soft_pixel_fraction']['mean']:.3f}% of frame "
            f"(binary matte is exactly 0%).")
+    if hq_skipped:
+        msg += f"\n\n<div class='cp-warn'>{hq_skipped}</div>"
     return (st, render(st, idx, mode, bgc, bgcol, bgimg), msg,
             gr.update(value="RGBA on checkerboard"), timings_md(st))
 

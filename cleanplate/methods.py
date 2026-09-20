@@ -412,6 +412,11 @@ def guided(clip, prompt: Prompt, base_width: int = 960, radius: int = 8,
     return out, stats
 
 
+def _cover(clip, prompt, variant: str):
+    from .coverage import cover
+    return cover(clip, prompt, variant=variant)
+
+
 # --------------------------------------------------------------- registry
 def make(name: str):
     """Look up a method by name."""
@@ -432,6 +437,9 @@ def make(name: str):
         # 5c cheap refinement
         "guided_960":    lambda c, p: guided(c, p, base_width=960),
         # 5d newer model
+        # Task 6: a matting stage allowed to ADD coverage (cleanplate/coverage.py)
+        "cover_960":     lambda c, p: _cover(c, p, "suspect"),
+        "cover2_960":    lambda c, p: _cover(c, p, "wideband"),
         "matanyone2_960":  lambda c, p: sam2_matanyone(c, p, width=960,
                                                        model="matanyone2"),
         "matanyone2_1920": lambda c, p: sam2_matanyone(c, p, width=1920,

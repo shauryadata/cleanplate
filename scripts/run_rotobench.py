@@ -35,8 +35,26 @@ from cleanplate.memguard import MemoryGuard                           # noqa: E4
 from cleanplate.paths import ROOT, rel                                # noqa: E402
 
 OUT = ROOT / "outputs" / "_bench_p"
+# Resource cap, added after the run stopped on two memory aborts, both the zoom pass on
+# P03. The zoom methods re-matte the head box at native resolution, so their cost scales
+# with that box: 0.25 and 0.28 MP completed (P01, P02), 0.48 MP did not (P03), on a
+# machine that was already 13-16 GB into swap. Above this cap the job is recorded as
+# "does not fit", not scored, and the zoom claims are judged on clips where every method
+# ran. The methods themselves are untouched, so Task 4's claims are tested on Task 4's
+# method.
+ZOOM_METHODS = {"hairzoom_960", "hairzoom2_960", "cover_960", "cover2_960"}
+ZOOM_BOX_CAP_MP = 0.30
 METHODS = ["binary_960", "baseline_960", "matanyone2_960", "guided_960",
            "vitmatte_960", "hairzoom_960", "hairzoom2_960"]
+# The coverage repair builds on hairzoom2, so it inherits the same size cap.
+COVER = ["cover_960", "cover2_960"]
+
+
+def zoom_box_mp(c) -> float:
+    """Megapixels of the region the zoom pass would re-matte, from the reference."""
+    gt = bench.load_alpha(c.alpha_dir)
+    l, t, r, b = bench.hair_box(gt, pad=48)
+    return (r - l) * (b - t) / 1e6
 
 
 def worker(clip_name: str, mname: str) -> None:
@@ -67,8 +85,22 @@ def main() -> None:
 
     clips = [c for c in bench.clips("P") if not args.clip or c.name in set(args.clip)]
     ms = args.method or METHODS
-    jobs = [(c.name, m) for c in clips for m in ms
-            if not (OUT / m / f"{c.name}.json").exists()]
+    jobs = []
+    for c in clips:
+        mp = zoom_box_mp(c)
+        for m in ms:
+            if (OUT / m / f"{c.name}.json").exists():
+                continue
+            if m in ZOOM_METHODS and mp > ZOOM_BOX_CAP_MP:
+                (OUT / m).mkdir(parents=True, exist_ok=True)
+                (OUT / m / f"{c.name}_TOOBIG.json").write_text(json.dumps(
+                    {"method": m, "clip": c.name, "NOT_RUN": "zoom region "
+                     f"{mp:.2f} MP exceeds the {ZOOM_BOX_CAP_MP} MP cap for this machine",
+                     "zoom_box_mp": round(mp, 3)}, indent=2) + "\n")
+                print(f"[rotobench] skip {m} on {c.name}: zoom region {mp:.2f} MP "
+                      f"> {ZOOM_BOX_CAP_MP} MP cap (recorded, not scored)", flush=True)
+                continue
+            jobs.append((c.name, m))
     print(f"[rotobench] {len(clips)} clips x {len(ms)} methods; {len(jobs)} to run "
           f"({len(clips) * len(ms) - len(jobs)} already on disk)", flush=True)
     aborts, t_all = [], time.perf_counter()

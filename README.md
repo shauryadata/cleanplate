@@ -7,9 +7,10 @@ Apple Silicon (MPS), CUDA, or CPU.
 
 ## Status
 
-**Task 5 — removal: done.** Click a thing, it goes away, the background fills in. Plus a
-diagnosis of the two bugs the first real user hit. The app runs locally with one
-command:
+**Task 6 — RotoBench on professional truth: done.** The benchmark no longer scores
+against a reference I keyed myself. It scores against the *Tears of Steel* compositing
+team's own keys, on twelve clips whose truth is proven frame-aligned to its plate.
+Thirteen prior conclusions were re-tested against it: **8 held, 3 reversed, 1 partial**.
 
 ```bash
 python app.py
@@ -21,21 +22,23 @@ python app.py
 |---|---|
 | Device | Apple M3 Pro, 18 GB, MPS — **zero fallback ops in any model stage** |
 | Track (SAM 2.1 hiera-small) | ~0.82 s/frame (1.2 fps) |
-| Refine (MatAnyone) | ~0.13 s/frame (7.9 fps) |
-| RGBA + despill | ~0.007 s/frame |
+| Refine (MatAnyone 2, default) | ~0.22 s/frame |
+| Refine + hair zoom (HQ toggle) | ~0.49 s/frame — best matte on professional truth |
 | Remove (ProPainter, fp16) | ~2.2 s/frame — 10x matting, and the memory ceiling |
-| Whole 96-frame shot, matte only | about 95 s |
+
+**[RotoBench](docs/ROTOBENCH.md)** is the public benchmark: what it is, why
+self-consistency is not accuracy, the truth's provenance, and how to submit a method.
 
 Reports: [Task 1](docs/TASK1_REPORT.md) (one-click matte),
 [Task 2](docs/TASK2_REPORT.md) (soft alpha, metrics),
 [Task 3](docs/TASK3_REPORT.md) (the app),
 [Task 4](docs/TASK4_REPORT.md) (ground truth, then hair),
-[Task 5](docs/TASK5_REPORT.md) (the user's bug, then removal).
-Decisions in [DECISIONS.md](docs/DECISIONS.md), accuracy in [BENCH.md](docs/BENCH.md),
-removal in [REMOVAL_BENCH.md](docs/REMOVAL_BENCH.md), and the things that are
-still wrong in [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
-
-RotoBench — a public benchmark of AI matte quality — comes in a later phase.
+[Task 5](docs/TASK5_REPORT.md) (the user's bug, then removal),
+[Task 6](docs/TASK6_REPORT.md) (RotoBench gets real truth).
+Decisions in [DECISIONS.md](docs/DECISIONS.md), standings in
+[ROTOBENCH_RESULTS.md](docs/ROTOBENCH_RESULTS.md), removal in
+[REMOVAL_BENCH.md](docs/REMOVAL_BENCH.md), and the things that are still wrong in
+[KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
 ## Local by design
 
