@@ -171,14 +171,23 @@ fetch_propainter() {
 # alignment from pixels before it is written. The recipes in truth/P*/recipe.json are
 # the source of truth; nothing here is chosen at fetch time.
 fetch_pro() {
+  # The raw EXR is a rebuild cache, not an input: the benchmark only reads truth/P*/.
+  # If it has been archived to an external disk, link it back instead of re-fetching
+  # 21 GB. Override the location with CLEANPLATE_ARCHIVE.
+  local arch="${CLEANPLATE_ARCHIVE:-/Volumes/ARCHIVE/cleanplate/tos_pro}"
+  if [ ! -e datasets/tos_pro ] && [ -d "$arch" ]; then
+    log "using the archived EXR at $arch (symlinked; unplug-safe once the clips are built)"
+    mkdir -p datasets && ln -s "$arch" datasets/tos_pro
+  fi
   local free_gb; free_gb=$(df -g . | awk 'NR==2{print $4}')
   log "Tier P needs about 15 GB of raw EXR plus 0.7 GB built; ${free_gb} GB free here"
   if [ "${free_gb:-0}" -lt 20 ]; then
     echo "   under 20 GB free - refusing to start. Free space, then re-run." >&2; exit 1
   fi
   OPENCV_IO_ENABLE_OPENEXR=1 "$PY" scripts/build_pro_truth.py
-  log "raw EXR can be deleted afterwards (rm -rf datasets/tos_pro/*/); the built clips"
-  log "in truth/P*/ are all the benchmark reads, and this target rebuilds them"
+  log "raw EXR is a rebuild cache; the built clips in truth/P*/ are all the benchmark"
+  log "reads. Archive it (mv datasets/tos_pro \$CLEANPLATE_ARCHIVE) or delete it - this"
+  log "target links it back if present, and re-fetches it if not."
 }
 
 case "${1:-all}" in

@@ -26,6 +26,12 @@ python app.py
 | Refine + hair zoom (HQ toggle) | ~0.49 s/frame — best matte on professional truth |
 | Remove (ProPainter, fp16) | ~2.2 s/frame — 10x matting, and the memory ceiling |
 
+Big assets are never committed and never required: `./scripts/download.sh all` fetches
+models and footage, `./scripts/download.sh pro` builds the benchmark truth. Its ~21 GB of
+raw EXR is a rebuild cache — archive it to an external disk and the download script links
+it back (`CLEANPLATE_ARCHIVE`), or delete it and the script re-fetches. The built clips
+rebuild bit-identically either way.
+
 **[RotoBench](docs/ROTOBENCH.md)** is the public benchmark: what it is, why
 self-consistency is not accuracy, the truth's provenance, and how to submit a method.
 
