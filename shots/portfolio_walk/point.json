@@ -1,0 +1,121 @@
+{
+  "shot": "portfolio_walk",
+  "image_size": [
+    1280,
+    534
+  ],
+  "prompts": [
+    {
+      "frame": 0,
+      "positive": [
+        [
+          480,
+          267
+        ]
+      ],
+      "negative": []
+    },
+    {
+      "frame": 67,
+      "positive": [
+        [
+          469,
+          333
+        ],
+        [
+          533,
+          480
+        ],
+        [
+          553,
+          80
+        ]
+      ],
+      "negative": [
+        [
+          428,
+          505
+        ]
+      ]
+    },
+    {
+      "frame": 96,
+      "positive": [
+        [
+          540,
+          100
+        ],
+        [
+          540,
+          330
+        ],
+        [
+          480,
+          330
+        ],
+        [
+          465,
+          225
+        ],
+        [
+          435,
+          400
+        ]
+      ],
+      "negative": []
+    },
+    {
+      "frame": 105,
+      "positive": [
+        [
+          530,
+          120
+        ],
+        [
+          550,
+          350
+        ],
+        [
+          480,
+          330
+        ],
+        [
+          450,
+          228
+        ],
+        [
+          422,
+          400
+        ]
+      ],
+      "negative": []
+    },
+    {
+      "frame": 150,
+      "positive": [
+        [
+          650,
+          130
+        ],
+        [
+          665,
+          380
+        ],
+        [
+          600,
+          380
+        ],
+        [
+          575,
+          260
+        ],
+        [
+          535,
+          420
+        ]
+      ],
+      "negative": []
+    }
+  ],
+  "_note": "Frames 0 and 67: the published walk clicks (shots/walk/point.json) scaled by 1.3333 to 1280 px. The matte runs at 960 px, where they map back to the published clicks exactly; same start frame, so the frame-67 correction lands on the same picture. Frames 96, 105 and 150: corrections for the second half, which the 4 s shot never reached. The orbit shows the back of the jacket and SAM 2 left it out, so each frame describes the whole subject: head, shirt, sleeve, shoulder panel, print. MatAnyone is re-anchored on frames [90, 96, 100, 105, 150] so the panel grows in."
+}
