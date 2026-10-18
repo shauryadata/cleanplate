@@ -206,12 +206,15 @@ def encode(patterns: list[Path], out_base: Path) -> list[dict]:
     n = len(patterns)
     # Square pixels: the plate's JPEG frames carry an 801:800 sample aspect from the
     # source scale, which would make the halves meet a pixel or two off the middle.
+    # Limited (tv) range: the JPEG frames are full range, and a full-range VP9 stream
+    # fails in Chrome's macOS hardware decoder (VideoToolbox, "video decode error"),
+    # so the pair froze on its poster there. The other loops are limited range too.
     vf = ["-filter_complex",
           ("".join(f"[{i}:v]" for i in range(n)) + f"hstack=inputs={n}," if n > 1 else "")
-          + "setsar=1"]
+          + "setsar=1,scale=out_range=tv,format=yuv420p"]
     # cpu-used 0 (the slowest, best-compressing effort) at the same crf keeps the 2560 px
     # pair under the cap without lowering quality.
-    vp9 = ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-pix_fmt", "yuv420p",
+    vp9 = ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-pix_fmt", "yuv420p", "-color_range", "tv",
            "-row-mt", "1", "-deadline", "good", "-cpu-used", "0"]
     made = []
     out = out_base.with_suffix(".webm")
@@ -225,7 +228,8 @@ def encode(patterns: list[Path], out_base: Path) -> list[dict]:
     mp4 = out_base.with_suffix(".mp4")
     subprocess.run(["ffmpeg", "-v", "error", "-y", *src, *vf, "-an", "-c:v", "libx264",
                     "-crf", "28", "-preset", "slow", "-profile:v", "high", "-pix_fmt",
-                    "yuv420p", "-movflags", "+faststart", str(mp4)], check=True)
+                    "yuv420p", "-color_range", "tv", "-movflags", "+faststart", str(mp4)],
+                   check=True)
     for f in (out, mp4):
         size = f.stat().st_size
         if size > MAX_LOOP_BYTES:
