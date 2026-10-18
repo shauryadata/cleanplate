@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .paths import ROOT, SOURCE_MOVIE, frames_dir, shot_dir
+from .paths import ROOT, SOURCE_MOVIE, frames_dir, rel, shot_dir
 
 FOOTAGE_CREDIT = "(CC) Blender Foundation | mango.blender.org"
 FOOTAGE_URL = "https://media.xiph.org/tearsofsteel/tears_of_steel_1080p.webm"
@@ -124,7 +124,10 @@ def extract_shot(name: str, start: str | float, duration: float = 4.0,
         "resolution": [w, h],
         "source_resolution": [stream.get("width"), stream.get("height")],
         "source_fps": stream.get("r_frame_rate"),
-        "ffmpeg_cmd": " ".join(cmd),
+        # Recorded with repo-relative paths, as source_movie is, so shot.json names
+        # no machine's home directory; run it from the repo root.
+        "ffmpeg_cmd": " ".join(rel(c) if c in (str(source), str(fdir / "%05d.jpg")) else c
+                               for c in cmd),
     }
     (shot_dir(name) / "shot.json").write_text(json.dumps(meta, indent=2) + "\n")
     return meta
