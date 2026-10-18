@@ -7,18 +7,20 @@
 Writes into the portfolio:
 
   public/demos/cleanplate/
-    plate.webm, plate.mp4            the walk plate, untouched, 8 s
-    comp.webm, comp.mp4              the comp over Mars: same frames, start and length
-    poster.jpg, plate-poster.jpg     first frame of the comp and of the plate
+    pair.webm, pair.mp4              the walk plate (left half) and the comp over Mars
+                                     (right half) side by side in one file, 8 s: one
+                                     decoder, so the portfolio's compare slider can never
+                                     drift (revamp Gate 4B)
+    pair-poster.jpg                  the first frame of both halves
     stills/1-click.jpg               the click, on frame 0
     stills/2-mask.png                SAM 2's binary mask, frame 0
     stills/3-matte.png               the high-quality soft alpha, frame 0
     stills/4-comp.jpg                the comp, frame 0
     stills/2-mask-detail.png, stills/3-matte-detail.png
                                      the head region of 2 and 3, where the edge differs
-    hair-standard.webm/.mp4, hair-hq.webm/.mp4, hair-poster.jpg
+    hair-pair.webm/.mp4, hair-pair-poster.jpg
                                      the app's two refine passes on RotoBench clip P01
-                                     (backlit hair), 4 s, same frames
+                                     (backlit hair), standard left and HQ right, 4 s
   content/data/
     rotobench.json                   Tier P standings and the stability-vs-truth table,
                                      computed by scripts/rotobench_report.py's functions
@@ -194,25 +196,52 @@ def probe(path: Path) -> dict:
             "seconds": round(float(j["format"]["duration"]), 3)}
 
 
-def encode(pattern: Path, out_base: Path) -> list[dict]:
-    """WebM VP9 (crf 33, constant quality) and MP4 H.264 (crf 28, faststart), no audio."""
-    src = ["-framerate", str(FPS), "-start_number", "0", "-i", str(pattern)]
-    jobs = {
-        ".webm": ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-pix_fmt", "yuv420p",
-                  "-row-mt", "1", "-deadline", "good", "-cpu-used", "1"],
-        ".mp4": ["-c:v", "libx264", "-crf", "28", "-preset", "slow", "-profile:v", "high",
-                 "-pix_fmt", "yuv420p", "-movflags", "+faststart"],
-    }
+def encode(patterns: list[Path], out_base: Path) -> list[dict]:
+    """WebM VP9 (crf 33, constant quality, two-pass) and MP4 H.264 (crf 28, faststart),
+    no audio. Two or more frame sequences are stacked side by side (hstack) into one file,
+    so a player decodes them as one stream and the halves can never drift apart."""
+    src: list[str] = []
+    for pattern in patterns:
+        src += ["-framerate", str(FPS), "-start_number", "0", "-i", str(pattern)]
+    n = len(patterns)
+    # Square pixels: the plate's JPEG frames carry an 801:800 sample aspect from the
+    # source scale, which would make the halves meet a pixel or two off the middle.
+    vf = ["-filter_complex",
+          ("".join(f"[{i}:v]" for i in range(n)) + f"hstack=inputs={n}," if n > 1 else "")
+          + "setsar=1"]
+    # cpu-used 0 (the slowest, best-compressing effort) at the same crf keeps the 2560 px
+    # pair under the cap without lowering quality.
+    vp9 = ["-c:v", "libvpx-vp9", "-crf", "33", "-b:v", "0", "-pix_fmt", "yuv420p",
+           "-row-mt", "1", "-deadline", "good", "-cpu-used", "0"]
     made = []
-    for ext, codec in jobs.items():
-        out = out_base.with_suffix(ext)
-        subprocess.run(["ffmpeg", "-v", "error", "-y", *src, "-an", *codec, str(out)],
-                       check=True)
-        size = out.stat().st_size
+    out = out_base.with_suffix(".webm")
+    log = out_base.with_name(f".{out_base.name}-vp9")
+    for p in ("1", "2"):
+        dest = ["-f", "null", "-"] if p == "1" else [str(out)]
+        subprocess.run(["ffmpeg", "-v", "error", "-y", *src, *vf, "-an", *vp9, "-pass", p,
+                        "-passlogfile", str(log), *dest], check=True)
+    for f in out_base.parent.glob(f".{out_base.name}-vp9*"):
+        f.unlink()
+    mp4 = out_base.with_suffix(".mp4")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", *src, *vf, "-an", "-c:v", "libx264",
+                    "-crf", "28", "-preset", "slow", "-profile:v", "high", "-pix_fmt",
+                    "yuv420p", "-movflags", "+faststart", str(mp4)], check=True)
+    for f in (out, mp4):
+        size = f.stat().st_size
         if size > MAX_LOOP_BYTES:
-            raise SystemExit(f"{out.name} is {size:,} bytes, over the 2.5 MB loop cap")
-        made.append({"file": out.name, "bytes": size, **probe(out)})
+            raise SystemExit(f"{f.name} is {size:,} bytes, over the 2.5 MB loop cap")
+        made.append({"file": f.name, "bytes": size, **probe(f)})
     return made
+
+
+def side_by_side(*imgs: Image.Image) -> Image.Image:
+    """The first frames of a pair, side by side like the loop: a poster for it."""
+    out = Image.new("RGB", (sum(i.width for i in imgs), max(i.height for i in imgs)))
+    x = 0
+    for img in imgs:
+        out.paste(img.convert("RGB"), (x, 0))
+        x += img.width
+    return out
 
 
 def save_jpg(img: Image.Image, path: Path, q: int = 85) -> None:
@@ -256,16 +285,19 @@ def export(portfolio: Path) -> None:
         raise SystemExit(f"expected {round(SECONDS * FPS)} plate and comp frames, "
                          f"found {n} and {n_comp}: run without --skip-render")
 
-    assets = []
-    assets += encode(frames_dir / "%05d.jpg", demos / "plate")
-    assets += encode(out / "comp_image" / "%05d.png", demos / "comp")
-    if len({(a["frames"], a["seconds"]) for a in assets}) != 1:
-        raise SystemExit(f"plate and comp loops differ in length: {assets}")
+    # Revamp Gate 4B: the plate and the comp in one file, plate on the left. The two
+    # used to be separate loops kept in step by re-seeking, which drifted on iPhones.
+    for old in ("plate.webm", "plate.mp4", "comp.webm", "comp.mp4", "plate-poster.jpg",
+                "poster.jpg", "hair-standard.webm", "hair-standard.mp4", "hair-hq.webm",
+                "hair-hq.mp4", "hair-poster.jpg"):
+        (demos / old).unlink(missing_ok=True)
+    assets = encode([frames_dir / "%05d.jpg", out / "comp_image" / "%05d.png"], demos / "pair")
+    if {(a["width"], a["frames"]) for a in assets} != {(2 * WIDTH, n)}:
+        raise SystemExit(f"the pair should be {2 * WIDTH} px wide and {n} frames: {assets}")
 
     plate0 = Image.open(frames_dir / "00000.jpg").convert("RGB")
     comp0 = Image.open(out / "comp_image" / "00000.png").convert("RGB")
-    save_jpg(plate0, demos / "plate-poster.jpg")
-    save_jpg(comp0, demos / "poster.jpg")
+    save_jpg(side_by_side(plate0, comp0), demos / "pair-poster.jpg")
 
     # Four stages, one frame: the click, SAM 2's mask, the soft alpha, the comp.
     prompt = json.loads((ROOT / "shots" / SHOT / "point.json").read_text())
@@ -301,8 +333,11 @@ def export(portfolio: Path) -> None:
             rgb, _ = compose.despill_green(rgb, al)
             bg = np.zeros_like(rgb); bg[:] = HAIR_BACKDROP
             Image.fromarray(compose.over(rgb, al, bg)).save(d / f"{i:05d}.png")
-        assets += encode(d / "%05d.png", demos / f"hair-{name}")
-    save_jpg(Image.open(tmp / "hq" / "00000.png"), demos / "hair-poster.jpg")
+    # Standard on the left, HQ on the right, one file (Gate 4B).
+    assets += encode([tmp / "standard" / "%05d.png", tmp / "hq" / "%05d.png"],
+                     demos / "hair-pair")
+    save_jpg(side_by_side(Image.open(tmp / "standard" / "00000.png"),
+                          Image.open(tmp / "hq" / "00000.png")), demos / "hair-pair-poster.jpg")
 
     commit = git("rev-parse", "HEAD")
     dirty = git("status", "--porcelain").splitlines()
@@ -471,13 +506,17 @@ def write_demo_json(path: Path, demos: Path, assets: list[dict], commit: str,
         ],
         "assets": {
             "loops": assets,
-            "posters": ["poster.jpg", "plate-poster.jpg", "hair-poster.jpg"],
+            "posters": ["pair-poster.jpg", "hair-pair-poster.jpg"],
+            "pair": {"files": ["pair.webm", "pair.mp4"],
+                     "left": "the plate", "right": "the comp", "half_width_px": WIDTH},
             "stills": {"frame": 0, "files": ["stills/1-click.jpg", "stills/2-mask.png",
                                              "stills/3-matte.png", "stills/4-comp.jpg"],
                        "detail_files": ["stills/2-mask-detail.png",
                                         "stills/3-matte-detail.png"],
                        "detail_box": list(detail_box)},
             "hair_toggle": {"clip": f"RotoBench {HAIR_CLIP} (backlit hair)",
+                            "files": ["hair-pair.webm", "hair-pair.mp4"],
+                            "left": "standard", "right": "hq",
                             "standard": f"{HAIR_PASSES['standard']}: MatAnyone 2, the "
                                         "app's default refine",
                             "hq": f"{HAIR_PASSES['hq']}: MatAnyone 2 + hair zoom, the "
